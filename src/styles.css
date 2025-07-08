@@ -43,6 +43,25 @@
 	filter: drop-shadow(0 0 2em #24c8db);
 }
 
+.logo.react:hover {
+	filter: drop-shadow(0 0 2em #61dafbaa);
+}
+
+@keyframes logo-spin {
+	from {
+		transform: rotate(0deg);
+	}
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.logo.react {
+		animation: logo-spin infinite 20s linear;
+	}
+}
+
 .row {
 	display: flex;
 	justify-content: center;
@@ -97,6 +116,54 @@ button {
 	margin-right: 5px;
 }
 
+/* React Component Styles */
+.tauri-demo {
+	margin-top: 2rem;
+	padding: 1rem;
+	border: 1px solid #e0e0e0;
+	border-radius: 8px;
+	background-color: rgba(255, 255, 255, 0.05);
+}
+
+.demo-section {
+	margin-bottom: 2rem;
+}
+
+.demo-section h3 {
+	margin-bottom: 1rem;
+	color: #333;
+	font-size: 1.2rem;
+}
+
+.greet-message {
+	margin-top: 1rem;
+	padding: 0.5rem;
+	background-color: rgba(36, 200, 219, 0.1);
+	border-left: 3px solid #24c8db;
+	border-radius: 4px;
+}
+
+.links-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+	gap: 1rem;
+	margin-top: 1rem;
+}
+
+.links-grid button {
+	padding: 0.75rem 1rem;
+	background-color: #f0f0f0;
+	border: 1px solid #ccc;
+	border-radius: 6px;
+	cursor: pointer;
+	transition: all 0.2s ease;
+}
+
+.links-grid button:hover {
+	background-color: #e0e0e0;
+	border-color: #24c8db;
+}
+
 @media (prefers-color-scheme: dark) {
 	:root {
 		color: #f6f6f6;
@@ -114,5 +181,31 @@ button {
 	}
 	button:active {
 		background-color: #0f0f0f69;
+	}
+
+	/* Dark mode styles for React components */
+	.tauri-demo {
+		border-color: #444;
+		background-color: rgba(0, 0, 0, 0.2);
+	}
+
+	.demo-section h3 {
+		color: #f6f6f6;
+	}
+
+	.greet-message {
+		background-color: rgba(36, 200, 219, 0.2);
+		color: #f6f6f6;
+	}
+
+	.links-grid button {
+		background-color: #333;
+		border-color: #555;
+		color: #f6f6f6;
+	}
+
+	.links-grid button:hover {
+		background-color: #444;
+		border-color: #24c8db;
 	}
 }

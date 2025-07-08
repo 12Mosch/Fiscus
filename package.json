@@ -11,8 +11,10 @@
 		"lint": "biome check --write"
 	},
 	"dependencies": {
+		"@tailwindcss/vite": "^4.1.11",
 		"@tauri-apps/api": "^2",
-		"@tauri-apps/plugin-opener": "^2"
+		"@tauri-apps/plugin-opener": "^2",
+		"tailwindcss": "^4.1.11"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.1.1",

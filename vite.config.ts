@@ -1,4 +1,5 @@
 import tailwindcss from "@tailwindcss/vite";
+import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
@@ -7,7 +8,14 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig({
 	// prevent vite from obscuring rust errors
 	clearScreen: false,
-	plugins: [react(), tailwindcss()],
+	plugins: [
+		tanstackRouter({
+			target: "react",
+			autoCodeSplitting: true,
+		}),
+		react(),
+		tailwindcss(),
+	],
 	server: {
 		// make sure this port matches the devUrl port in tauri.conf.json file
 		port: 1420,

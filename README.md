@@ -5,10 +5,11 @@ A modern desktop application built with Tauri 2.0 and React, providing a secure 
 ## Tech Stack
 
 - **Frontend**: React 18+ with TypeScript
+- **Routing**: Tanstack Router
 - **Build Tool**: Vite with HMR support
 - **Backend**: Rust with Tauri 2.0
-- **Styling**: CSS with TailwindCSS integration
-- **Development**: ESLint for code quality
+- **Styling**: CSS with TailwindCSS and shadcn/ui integration
+- **Development**: Biomme/js for code quality
 
 ## Features
 

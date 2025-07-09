@@ -5,8 +5,8 @@
 import { describe, expect, it } from "vitest";
 import {
 	formatCurrency,
-	formatCurrencyCompact,
 	formatCurrencyAbbreviated,
+	formatCurrencyCompact,
 	formatPercentage,
 	formatRelativeDate,
 	formatTransactionDate,
@@ -21,17 +21,30 @@ describe("formatCurrency", () => {
 
 	it("handles negative values correctly", () => {
 		expect(formatCurrency(-1234.56, "USD")).toBe("-$1,234.56");
-		expect(formatCurrency(-1234.56, "USD", { handleNegative: true })).toBe("-$1,234.56");
+		expect(formatCurrency(-1234.56, "USD", { handleNegative: true })).toBe(
+			"-$1,234.56",
+		);
 	});
 
 	it("shows positive sign when requested", () => {
-		expect(formatCurrency(1234.56, "USD", { showPositiveSign: true })).toBe("+$1,234.56");
-		expect(formatCurrency(-1234.56, "USD", { showPositiveSign: true })).toBe("-$1,234.56");
+		expect(formatCurrency(1234.56, "USD", { showPositiveSign: true })).toBe(
+			"+$1,234.56",
+		);
+		expect(formatCurrency(-1234.56, "USD", { showPositiveSign: true })).toBe(
+			"-$1,234.56",
+		);
 	});
 
 	it("respects custom fraction digits", () => {
-		expect(formatCurrency(1234.567, "USD", { maximumFractionDigits: 3 })).toBe("$1,234.567");
-		expect(formatCurrency(1234, "USD", { minimumFractionDigits: 0, maximumFractionDigits: 0 })).toBe("$1,234");
+		expect(formatCurrency(1234.567, "USD", { maximumFractionDigits: 3 })).toBe(
+			"$1,234.567",
+		);
+		expect(
+			formatCurrency(1234, "USD", {
+				minimumFractionDigits: 0,
+				maximumFractionDigits: 0,
+			}),
+		).toBe("$1,234");
 	});
 });
 

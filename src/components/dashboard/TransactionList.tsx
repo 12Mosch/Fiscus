@@ -14,7 +14,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
+import { formatCurrency, formatTransactionDate } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import type { Transaction, TransactionListProps } from "@/types/dashboard";
 
@@ -39,19 +39,12 @@ export function TransactionList({
 	const displayTransactions = transactions.slice(0, limit);
 
 	const formatAmount = (amount: number, type: Transaction["type"]) => {
-		const formatted = new Intl.NumberFormat("en-US", {
-			style: "currency",
-			currency: "USD",
-			minimumFractionDigits: 2,
-			maximumFractionDigits: 2,
-		}).format(Math.abs(amount));
-
 		if (type === "income") {
-			return `+${formatted}`;
+			return formatCurrency(amount, "USD", { showPositiveSign: true });
 		} else if (type === "expense") {
-			return `-${formatted}`;
+			return formatCurrency(-Math.abs(amount), "USD");
 		}
-		return formatted;
+		return formatCurrency(amount, "USD");
 	};
 
 	const getAmountColor = (type: Transaction["type"]) => {
@@ -62,23 +55,6 @@ export function TransactionList({
 				return "text-red-600 dark:text-red-400";
 			default:
 				return "text-gray-900 dark:text-white";
-		}
-	};
-
-	const formatDate = (date: Date) => {
-		const now = new Date();
-		const diffInDays = Math.floor(
-			(now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24),
-		);
-
-		if (diffInDays === 0) {
-			return "Today";
-		} else if (diffInDays === 1) {
-			return "Yesterday";
-		} else if (diffInDays < 7) {
-			return `${diffInDays} days ago`;
-		} else {
-			return date.toLocaleDateString();
 		}
 	};
 
@@ -170,7 +146,7 @@ export function TransactionList({
 										</div>
 
 										<p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-											{formatDate(transaction.date)}
+											{formatTransactionDate(transaction.date)}
 										</p>
 									</div>
 								</div>

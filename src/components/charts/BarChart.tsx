@@ -4,6 +4,10 @@
  */
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+	formatCurrencyAbbreviated,
+	formatCurrencyCompact,
+} from "@/lib/formatters";
 import type { BarChartProps } from "@/types/dashboard";
 
 export function BarChart({
@@ -44,31 +48,6 @@ export function BarChart({
 	);
 	const values = data.map((d) => Math.abs(d.value));
 	const maxValue = Math.max(...values) || 1;
-
-	// Format value for display
-	const formatValue = (value: number) => {
-		if (Math.abs(value) >= 1000000) {
-			return `$${(value / 1000000).toFixed(1)}M`;
-		} else if (Math.abs(value) >= 1000) {
-			return `$${(value / 1000).toFixed(1)}K`;
-		} else {
-			return new Intl.NumberFormat("en-US", {
-				style: "currency",
-				currency: "USD",
-				minimumFractionDigits: 0,
-				maximumFractionDigits: 0,
-			}).format(value);
-		}
-	};
-
-	const formatFullValue = (value: number) => {
-		return new Intl.NumberFormat("en-US", {
-			style: "currency",
-			currency: "USD",
-			minimumFractionDigits: 0,
-			maximumFractionDigits: 0,
-		}).format(value);
-	};
 
 	// Generate bars
 	const generateBars = () => {
@@ -154,7 +133,7 @@ export function BarChart({
 										rx="2"
 										className="hover:opacity-80 transition-opacity cursor-pointer"
 									>
-										<title>{`${bar.date}: ${formatFullValue(bar.value)}`}</title>
+										<title>{`${bar.date}: ${formatCurrencyCompact(bar.value)}`}</title>
 									</rect>
 
 									{/* Value labels on top of bars */}
@@ -164,7 +143,7 @@ export function BarChart({
 										textAnchor="middle"
 										className="text-xs fill-gray-600 dark:fill-gray-400"
 									>
-										{formatValue(bar.value)}
+										{formatCurrencyAbbreviated(bar.value)}
 									</text>
 								</g>
 							))}
@@ -185,7 +164,7 @@ export function BarChart({
 										dominantBaseline="middle"
 										className="text-xs fill-gray-500 dark:fill-gray-400"
 									>
-										{formatValue(value)}
+										{formatCurrencyAbbreviated(value)}
 									</text>
 								);
 							})}
@@ -223,7 +202,7 @@ export function BarChart({
 					<div>
 						<p className="text-xs text-gray-500 dark:text-gray-400">Average</p>
 						<p className="text-sm font-semibold text-gray-900 dark:text-white">
-							{formatValue(
+							{formatCurrencyAbbreviated(
 								data.reduce((sum, d) => sum + d.value, 0) / data.length,
 							)}
 						</p>
@@ -231,13 +210,13 @@ export function BarChart({
 					<div>
 						<p className="text-xs text-gray-500 dark:text-gray-400">Highest</p>
 						<p className="text-sm font-semibold text-gray-900 dark:text-white">
-							{formatValue(Math.max(...data.map((d) => d.value)))}
+							{formatCurrencyAbbreviated(Math.max(...data.map((d) => d.value)))}
 						</p>
 					</div>
 					<div>
 						<p className="text-xs text-gray-500 dark:text-gray-400">Lowest</p>
 						<p className="text-sm font-semibold text-gray-900 dark:text-white">
-							{formatValue(Math.min(...data.map((d) => d.value)))}
+							{formatCurrencyAbbreviated(Math.min(...data.map((d) => d.value)))}
 						</p>
 					</div>
 				</div>

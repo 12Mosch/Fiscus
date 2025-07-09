@@ -8,19 +8,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { formatCurrencyCompact } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import type { BudgetOverviewProps } from "@/types/dashboard";
 
 export function BudgetOverview({ budgets, className }: BudgetOverviewProps) {
-	const formatCurrency = (amount: number, currency: string) => {
-		return new Intl.NumberFormat("en-US", {
-			style: "currency",
-			currency: currency,
-			minimumFractionDigits: 0,
-			maximumFractionDigits: 0,
-		}).format(amount);
-	};
-
 	const calculateProgress = (spent: number, allocated: number) => {
 		return Math.min((spent / allocated) * 100, 100);
 	};
@@ -154,8 +146,8 @@ export function BudgetOverview({ budgets, className }: BudgetOverviewProps) {
 					<div className="space-y-2">
 						<div className="flex items-center justify-between text-sm">
 							<span className="text-gray-600 dark:text-gray-400">
-								{formatCurrency(totalSpent, "USD")} of{" "}
-								{formatCurrency(totalAllocated, "USD")}
+								{formatCurrencyCompact(totalSpent, "USD")} of{" "}
+								{formatCurrencyCompact(totalAllocated, "USD")}
 							</span>
 							<span
 								className={cn(
@@ -193,10 +185,11 @@ export function BudgetOverview({ budgets, className }: BudgetOverviewProps) {
 									</div>
 									<div className="text-right">
 										<p className="text-sm font-semibold text-gray-900 dark:text-white">
-											{formatCurrency(budget.spent, budget.currency)}
+											{formatCurrencyCompact(budget.spent, budget.currency)}
 										</p>
 										<p className="text-xs text-gray-500 dark:text-gray-400">
-											of {formatCurrency(budget.allocated, budget.currency)}
+											of{" "}
+											{formatCurrencyCompact(budget.allocated, budget.currency)}
 										</p>
 									</div>
 								</div>
@@ -207,8 +200,8 @@ export function BudgetOverview({ budgets, className }: BudgetOverviewProps) {
 										<span>{progress.toFixed(1)}% used</span>
 										<span>
 											{remaining >= 0
-												? `${formatCurrency(remaining, budget.currency)} remaining`
-												: `${formatCurrency(Math.abs(remaining), budget.currency)} over budget`}
+												? `${formatCurrencyCompact(remaining, budget.currency)} remaining`
+												: `${formatCurrencyCompact(Math.abs(remaining), budget.currency)} over budget`}
 										</span>
 									</div>
 								</div>

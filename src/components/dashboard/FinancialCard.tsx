@@ -5,6 +5,7 @@
 
 import { TrendingDown, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatCurrency } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import type { FinancialCardProps } from "@/types/dashboard";
 
@@ -17,12 +18,10 @@ export function FinancialCard({
 }: FinancialCardProps) {
 	const formatValue = (val: string | number) => {
 		if (typeof val === "number") {
-			return new Intl.NumberFormat("en-US", {
-				style: "currency",
-				currency: "USD", // TODO: Make currency configurable
+			return formatCurrency(val, "USD", {
 				minimumFractionDigits: 0,
 				maximumFractionDigits: 2,
-			}).format(val);
+			});
 		}
 		return val;
 	};

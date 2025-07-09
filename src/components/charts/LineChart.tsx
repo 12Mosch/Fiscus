@@ -6,6 +6,7 @@
 import { TrendingDown, TrendingUp } from "lucide-react";
 import { useId } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatCurrencyCompact } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import type { LineChartProps } from "@/types/dashboard";
 
@@ -83,16 +84,6 @@ export function LineChart({
 	const trendPercentage =
 		firstValue !== 0 ? ((lastValue - firstValue) / firstValue) * 100 : 0;
 
-	// Format value for display
-	const formatValue = (value: number) => {
-		return new Intl.NumberFormat("en-US", {
-			style: "currency",
-			currency: "USD",
-			minimumFractionDigits: 0,
-			maximumFractionDigits: 0,
-		}).format(value);
-	};
-
 	return (
 		<Card className={className}>
 			<CardHeader>
@@ -115,7 +106,7 @@ export function LineChart({
 					</div>
 				</div>
 				<div className="text-2xl font-bold text-gray-900 dark:text-white">
-					{formatValue(lastValue)}
+					{formatCurrencyCompact(lastValue)}
 				</div>
 			</CardHeader>
 
@@ -215,7 +206,7 @@ export function LineChart({
 										strokeWidth="2"
 										className="transition-all cursor-pointer hover:stroke-width-3"
 									>
-										<title>{`${point.date}: ${formatValue(point.value)}`}</title>
+										<title>{`${point.date}: ${formatCurrencyCompact(point.value)}`}</title>
 									</circle>
 								);
 							})}
@@ -236,7 +227,7 @@ export function LineChart({
 										dominantBaseline="middle"
 										className="text-xs fill-gray-500 dark:fill-gray-400"
 									>
-										{formatValue(value)}
+										{formatCurrencyCompact(value)}
 									</text>
 								);
 							})}

@@ -6,6 +6,7 @@
 import { CreditCard, PiggyBank, TrendingUp, Wallet } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatCurrency, formatRelativeDate } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
 import type { Account, AccountCardProps } from "@/types/dashboard";
 
@@ -31,37 +32,10 @@ const accountTypeLabels = {
 };
 
 export function AccountCard({ account, className }: AccountCardProps) {
-	const formatBalance = (balance: number, currency: string) => {
-		const isNegative = balance < 0;
-		const absBalance = Math.abs(balance);
-
-		const formatted = new Intl.NumberFormat("en-US", {
-			style: "currency",
-			currency: currency,
-			minimumFractionDigits: 2,
-			maximumFractionDigits: 2,
-		}).format(absBalance);
-
-		return isNegative ? `-${formatted}` : formatted;
-	};
-
-	const formatLastUpdated = (date: Date) => {
-		const now = new Date();
-		const diffInMinutes = Math.floor(
-			(now.getTime() - date.getTime()) / (1000 * 60),
-		);
-
-		if (diffInMinutes < 60) {
-			return `${diffInMinutes}m ago`;
-		} else if (diffInMinutes < 1440) {
-			return `${Math.floor(diffInMinutes / 60)}h ago`;
-		} else {
-			return date.toLocaleDateString();
-		}
-	};
-
 	const getBalanceColor = (balance: number, type: Account["type"]) => {
 		if (type === "credit") {
+			// For credit accounts, negative balance means debt (red)
+			// Positive balance means credit (green)
 			return balance < 0
 				? "text-red-600 dark:text-red-400"
 				: "text-green-600 dark:text-green-400";
@@ -116,14 +90,16 @@ export function AccountCard({ account, className }: AccountCardProps) {
 								getBalanceColor(account.balance, account.type),
 							)}
 						>
-							{formatBalance(account.balance, account.currency)}
+							{formatCurrency(account.balance, account.currency, {
+								handleNegative: true,
+							})}
 						</p>
 					</div>
 
 					{/* Last Updated */}
 					<div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
 						<span>Last updated</span>
-						<span>{formatLastUpdated(account.lastUpdated)}</span>
+						<span>{formatRelativeDate(account.lastUpdated)}</span>
 					</div>
 
 					{/* Account Type Specific Info */}
@@ -134,7 +110,7 @@ export function AccountCard({ account, className }: AccountCardProps) {
 									Available Credit
 								</span>
 								<span className="font-medium text-green-600 dark:text-green-400">
-									{formatBalance(Math.abs(account.balance), account.currency)}
+									{formatCurrency(Math.abs(account.balance), account.currency)}
 								</span>
 							</div>
 						</div>
@@ -147,7 +123,7 @@ export function AccountCard({ account, className }: AccountCardProps) {
 									Portfolio Value
 								</span>
 								<span className="font-medium text-purple-600 dark:text-purple-400">
-									{formatBalance(account.balance, account.currency)}
+									{formatCurrency(account.balance, account.currency)}
 								</span>
 							</div>
 						</div>

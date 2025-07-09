@@ -70,6 +70,49 @@ The application uses a comprehensive theme management system built with Zustand 
 - **ModeToggle**: Dropdown with Light/Dark/System options
 - **SimpleThemeToggle**: Simple toggle button for Light/Dark switching
 
+## Currency Formatting
+
+The dashboard uses shared currency formatting utilities to ensure consistency across all components.
+
+### Available Formatters
+```typescript
+import {
+  formatCurrency,
+  formatCurrencyCompact,
+  formatCurrencyAbbreviated,
+  formatPercentage,
+  formatRelativeDate,
+  formatTransactionDate
+} from '@/lib/formatters';
+
+// Standard currency formatting (2 decimal places)
+formatCurrency(1234.56, "USD"); // "$1,234.56"
+formatCurrency(-1234.56, "USD", { handleNegative: true }); // "-$1,234.56"
+formatCurrency(1234.56, "USD", { showPositiveSign: true }); // "+$1,234.56"
+
+// Compact formatting (no decimal places)
+formatCurrencyCompact(1234.56, "USD"); // "$1,235"
+
+// Abbreviated formatting for large amounts
+formatCurrencyAbbreviated(1500000, "USD"); // "$1.5M"
+formatCurrencyAbbreviated(1500, "USD"); // "$1.5K"
+
+// Percentage formatting
+formatPercentage(12.345); // "12.3%"
+formatPercentage(12.345, 2); // "12.35%"
+
+// Date formatting
+formatRelativeDate(new Date()); // "5m ago", "2h ago", "Yesterday"
+formatTransactionDate(new Date()); // "Today", "Yesterday", "3 days ago"
+```
+
+### Usage Guidelines
+- Use `formatCurrency` for precise financial displays (account balances, transaction amounts)
+- Use `formatCurrencyCompact` for charts and summaries where space is limited
+- Use `formatCurrencyAbbreviated` for large amounts in charts (K, M, B suffixes)
+- All formatters default to USD but accept any currency code
+- Consistent 2 decimal places for financial precision, 0 decimal places for charts
+
 ### Usage
 
 #### Basic Theme Usage

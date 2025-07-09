@@ -5,6 +5,7 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatCurrencyCompact } from "@/lib/formatters";
 import type { PieChartProps } from "@/types/dashboard";
 
 export function PieChart({
@@ -78,21 +79,12 @@ export function PieChart({
 
 	const slices = generateSlices();
 
-	const formatCurrency = (amount: number) => {
-		return new Intl.NumberFormat("en-US", {
-			style: "currency",
-			currency: "USD",
-			minimumFractionDigits: 0,
-			maximumFractionDigits: 0,
-		}).format(amount);
-	};
-
 	return (
 		<Card className={className}>
 			<CardHeader>
 				<CardTitle>{title}</CardTitle>
 				<div className="text-sm text-gray-600 dark:text-gray-400">
-					Total: {formatCurrency(total)}
+					Total: {formatCurrencyCompact(total)}
 				</div>
 			</CardHeader>
 
@@ -121,7 +113,7 @@ export function PieChart({
 										className="hover:opacity-80 transition-opacity cursor-pointer"
 									>
 										<title>
-											{slice.category}: {formatCurrency(slice.amount)} (
+											{slice.category}: {formatCurrencyCompact(slice.amount)} (
 											{slice.percentage.toFixed(1)}%)
 										</title>
 									</path>
@@ -154,7 +146,7 @@ export function PieChart({
 								textAnchor="middle"
 								className="text-xs fill-gray-600 dark:fill-gray-400"
 							>
-								{formatCurrency(total)}
+								{formatCurrencyCompact(total)}
 							</text>
 						</svg>
 					</div>
@@ -187,7 +179,7 @@ export function PieChart({
 									</div>
 									<div className="text-right flex-shrink-0">
 										<p className="text-sm font-semibold text-gray-900 dark:text-white">
-											{formatCurrency(slice.amount)}
+											{formatCurrencyCompact(slice.amount)}
 										</p>
 										<Badge variant="secondary" className="text-xs">
 											{slice.percentage.toFixed(1)}%

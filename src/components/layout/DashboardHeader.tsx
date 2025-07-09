@@ -45,6 +45,7 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
 		document.documentElement.classList.contains("dark"),
 	);
 	const [searchQuery, setSearchQuery] = useState("");
+	const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
 
 	// Sync dark mode state with DOM on mount
 	useEffect(() => {
@@ -64,6 +65,25 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
 		const newDarkMode = !isDarkMode;
 		setIsDarkMode(newDarkMode);
 		document.documentElement.classList.toggle("dark", newDarkMode);
+	};
+
+	const handleSearch = (query: string) => {
+		// TODO: Implement actual search functionality
+		// This could filter transactions, accounts, etc.
+		console.log("Searching for:", query);
+	};
+
+	const handleMobileSearchToggle = () => {
+		setIsMobileSearchOpen(!isMobileSearchOpen);
+	};
+
+	const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const query = e.target.value;
+		setSearchQuery(query);
+		// Debounce search or trigger on enter
+		if (query.length > 2 || query.length === 0) {
+			handleSearch(query);
+		}
 	};
 
 	const handleNotificationClick = (notification: NotificationItem) => {
@@ -103,12 +123,12 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
 
 					{/* Search */}
 					<div className="relative hidden md:block">
-						<Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+						<Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 z-10 pointer-events-none" />
 						<Input
 							placeholder="Search transactions, accounts..."
 							value={searchQuery}
-							onChange={(e) => setSearchQuery(e.target.value)}
-							className="w-64 pl-10"
+							onChange={handleSearchChange}
+							className="w-64 pl-12"
 						/>
 					</div>
 				</div>
@@ -116,7 +136,13 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
 				{/* Right Section */}
 				<div className="flex items-center gap-2">
 					{/* Search Button (Mobile) */}
-					<Button variant="ghost" size="sm" className="md:hidden">
+					<Button
+						variant="ghost"
+						size="sm"
+						className="md:hidden"
+						onClick={handleMobileSearchToggle}
+						aria-label="Toggle search"
+					>
 						<Search className="h-5 w-5" />
 					</Button>
 
@@ -234,6 +260,22 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
 					</DropdownMenu>
 				</div>
 			</div>
+
+			{/* Mobile Search Input */}
+			{isMobileSearchOpen && (
+				<div className="border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-6 py-3 md:hidden">
+					<div className="relative">
+						<Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 z-10 pointer-events-none" />
+						<Input
+							placeholder="Search transactions, accounts..."
+							value={searchQuery}
+							onChange={handleSearchChange}
+							className="w-full pl-12"
+							autoFocus
+						/>
+					</div>
+				</div>
+			)}
 		</header>
 	);
 }

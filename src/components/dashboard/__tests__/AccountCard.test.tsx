@@ -4,8 +4,8 @@
 
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { AccountCard } from "../AccountCard";
 import type { Account } from "@/types/dashboard";
+import { AccountCard } from "../AccountCard";
 
 describe("AccountCard", () => {
 	const baseAccount: Account = {
@@ -20,7 +20,7 @@ describe("AccountCard", () => {
 
 	it("renders account information correctly", () => {
 		render(<AccountCard account={baseAccount} />);
-		
+
 		expect(screen.getByText("Test Account")).toBeInTheDocument();
 		expect(screen.getByText("Checking")).toBeInTheDocument();
 		expect(screen.getByText("****1234")).toBeInTheDocument();
@@ -37,14 +37,14 @@ describe("AccountCard", () => {
 		};
 
 		render(<AccountCard account={creditAccount} />);
-		
+
 		// Should show the debt as negative balance
 		expect(screen.getByText("-$1,250.75")).toBeInTheDocument();
-		
+
 		// Should show available credit: $5,000 - $1,250.75 = $3,749.25
 		expect(screen.getByText("Available Credit")).toBeInTheDocument();
 		expect(screen.getByText("$3,749.25")).toBeInTheDocument();
-		
+
 		// Should show credit limit
 		expect(screen.getByText("Credit Limit")).toBeInTheDocument();
 		expect(screen.getByText("$5,000.00")).toBeInTheDocument();
@@ -85,10 +85,10 @@ describe("AccountCard", () => {
 		};
 
 		render(<AccountCard account={creditAccount} />);
-		
+
 		// Should show the debt as negative balance
 		expect(screen.getByText("-$1,250.75")).toBeInTheDocument();
-		
+
 		// Should NOT show available credit section
 		expect(screen.queryByText("Available Credit")).not.toBeInTheDocument();
 		expect(screen.queryByText("Credit Limit")).not.toBeInTheDocument();
@@ -103,7 +103,7 @@ describe("AccountCard", () => {
 		};
 
 		render(<AccountCard account={savingsAccount} />);
-		
+
 		expect(screen.getByText("$5,000.00")).toBeInTheDocument();
 		expect(screen.queryByText("Available Credit")).not.toBeInTheDocument();
 		expect(screen.queryByText("Credit Limit")).not.toBeInTheDocument();
@@ -135,8 +135,10 @@ describe("AccountCard", () => {
 			creditLimit: 5000,
 		};
 
-		const { rerender } = render(<AccountCard account={creditAccountWithDebt} />);
-		
+		const { rerender } = render(
+			<AccountCard account={creditAccountWithDebt} />,
+		);
+
 		// Debt should be shown in red
 		const debtElement = screen.getByText("-$1,250.75");
 		expect(debtElement).toHaveClass("text-red-600");

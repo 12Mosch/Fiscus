@@ -3,17 +3,9 @@
  * Top navigation bar with user menu, notifications, and mobile menu toggle
  */
 
-import {
-	Bell,
-	LogOut,
-	Menu,
-	Moon,
-	Search,
-	Settings,
-	Sun,
-	User,
-} from "lucide-react";
-import { useEffect, useState } from "react";
+import { Bell, LogOut, Menu, Search, Settings, User } from "lucide-react";
+import { useState } from "react";
+import { ModeToggle } from "@/components/mode-toggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,16 +33,8 @@ interface DashboardHeaderProps {
 }
 
 export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
-	const [isDarkMode, setIsDarkMode] = useState(
-		document.documentElement.classList.contains("dark"),
-	);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
-
-	// Sync dark mode state with DOM on mount
-	useEffect(() => {
-		setIsDarkMode(document.documentElement.classList.contains("dark"));
-	}, []);
 
 	// Mock user data
 	const user = {
@@ -60,12 +44,6 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
 	};
 
 	const unreadNotifications = mockNotifications.filter((n) => !n.read);
-
-	const toggleDarkMode = () => {
-		const newDarkMode = !isDarkMode;
-		setIsDarkMode(newDarkMode);
-		document.documentElement.classList.toggle("dark", newDarkMode);
-	};
 
 	const handleSearch = (query: string) => {
 		// TODO: Implement actual search functionality
@@ -88,6 +66,7 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
 
 	const handleNotificationClick = (notification: NotificationItem) => {
 		console.log("Notification clicked:", notification);
+		// TODO: Implement notification handling
 		// In a real app, this would mark as read and potentially navigate
 	};
 
@@ -128,7 +107,7 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
 							placeholder="Search transactions, accounts..."
 							value={searchQuery}
 							onChange={handleSearchChange}
-							className="w-67 pl-10"
+							className="w-64 pl-10"
 						/>
 					</div>
 				</div>
@@ -146,19 +125,8 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
 						<Search className="h-5 w-5" />
 					</Button>
 
-					{/* Dark Mode Toggle */}
-					<Button
-						variant="ghost"
-						size="sm"
-						onClick={toggleDarkMode}
-						aria-label="Toggle dark mode"
-					>
-						{isDarkMode ? (
-							<Sun className="h-5 w-5" />
-						) : (
-							<Moon className="h-5 w-5" />
-						)}
-					</Button>
+					{/* Theme Toggle */}
+					<ModeToggle />
 
 					{/* Notifications */}
 					<Sheet>

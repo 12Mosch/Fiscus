@@ -9,9 +9,10 @@ This document provides a comprehensive guide to the Finance Dashboard UI compone
 ### Tech Stack
 - **Frontend Framework**: React 18+ with TypeScript
 - **Routing**: TanStack Router
-- **State Management**: Zustand (for UI state)
+- **State Management**: Zustand (for UI state and theme management)
 - **Build Tool**: Vite with HMR support
 - **Styling**: TailwindCSS with shadcn/ui components
+- **Theme Management**: Context-based theme provider with Zustand store
 - **Icons**: Lucide React
 
 ### Project Structure
@@ -32,7 +33,13 @@ src/
 │   │   ├── LineChart.tsx
 │   │   ├── PieChart.tsx
 │   │   └── BarChart.tsx
+│   ├── theme-provider.tsx  # Theme context provider
+│   ├── mode-toggle.tsx     # Theme toggle components
 │   └── ui/                 # shadcn/ui components
+├── stores/
+│   └── theme-store.ts      # Zustand theme store
+├── hooks/
+│   └── use-theme.ts        # Theme-related hooks
 ├── types/
 │   └── dashboard.ts        # TypeScript interfaces
 ├── data/
@@ -40,6 +47,83 @@ src/
 └── routes/
     └── dashboard.tsx       # Dashboard route
 ```
+
+## Theme Management
+
+The application uses a comprehensive theme management system built with Zustand and React Context for consistent dark/light mode support.
+
+### Architecture
+
+#### Theme Store (`src/stores/theme-store.ts`)
+- **Zustand Store**: Centralized theme state management
+- **Persistence**: Automatic localStorage persistence with rehydration
+- **System Theme Detection**: Monitors OS theme preference changes
+- **Type Safety**: Full TypeScript support with proper type definitions
+
+#### Theme Provider (`src/components/theme-provider.tsx`)
+- **React Context**: Provides theme state to all components
+- **System Theme Listener**: Automatically updates when OS theme changes
+- **DOM Management**: Handles CSS class application to document root
+- **Initialization**: Sets up theme on app startup
+
+#### Theme Components
+- **ModeToggle**: Dropdown with Light/Dark/System options
+- **SimpleThemeToggle**: Simple toggle button for Light/Dark switching
+
+### Usage
+
+#### Basic Theme Usage
+```typescript
+import { useTheme } from '@/components/theme-provider';
+
+function MyComponent() {
+  const { theme, resolvedTheme, setTheme } = useTheme();
+
+  return (
+    <div>
+      <p>Current theme: {theme}</p>
+      <p>Resolved theme: {resolvedTheme}</p>
+      <button onClick={() => setTheme('dark')}>Dark Mode</button>
+    </div>
+  );
+}
+```
+
+#### Using Theme Store Directly
+```typescript
+import { useThemeUtils } from '@/hooks/use-theme';
+
+function MyComponent() {
+  const { isDark, isLight, toggleTheme } = useThemeUtils();
+
+  return (
+    <button onClick={toggleTheme}>
+      {isDark ? 'Switch to Light' : 'Switch to Dark'}
+    </button>
+  );
+}
+```
+
+#### Adding Theme Toggle
+```typescript
+import { ModeToggle } from '@/components/mode-toggle';
+
+function Header() {
+  return (
+    <header>
+      <ModeToggle />
+    </header>
+  );
+}
+```
+
+### Features
+- **Three Theme Options**: Light, Dark, and System (follows OS preference)
+- **Persistent Storage**: User preference saved in localStorage
+- **System Theme Detection**: Automatically responds to OS theme changes
+- **Smooth Transitions**: CSS transitions for seamless theme switching
+- **Context-based State**: Consistent state management across components
+- **Type-safe Implementation**: Full TypeScript support
 
 ## Components
 
@@ -69,7 +153,7 @@ Top navigation bar with user menu, notifications, and search.
 - Global search functionality
 - Notification center
 - User profile dropdown
-- Dark mode toggle
+- Theme toggle with Light/Dark/System options
 - Mobile-responsive design
 
 ### Dashboard Components

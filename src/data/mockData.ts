@@ -42,6 +42,7 @@ export const mockAccounts: Account[] = [
 		currency: "USD",
 		lastUpdated: new Date("2024-01-15T11:45:00Z"),
 		accountNumber: "****9012",
+		creditLimit: 5000, // $5,000 credit limit
 	},
 	{
 		id: "acc-4",

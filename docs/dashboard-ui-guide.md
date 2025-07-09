@@ -283,7 +283,7 @@ SVG-based bar chart for comparing values.
 
 The dashboard uses comprehensive TypeScript interfaces defined in `src/types/dashboard.ts`:
 
-- `Account`: Bank account information
+- `Account`: Bank account information (includes optional `creditLimit` for credit accounts)
 - `Transaction`: Financial transaction data
 - `Budget`: Budget allocation and spending
 - `SpendingCategory`: Categorized spending data
@@ -404,6 +404,34 @@ import { DollarSign } from 'lucide-react';
   icon={<DollarSign className="h-5 w-5" />}
 />
 ```
+
+### Credit Account Handling
+
+The `AccountCard` component properly handles credit accounts with the following features:
+
+- **Available Credit Calculation**: For credit accounts with a `creditLimit`, available credit is calculated as `creditLimit - currentDebt`
+- **Balance Display**: Negative balances (debt) are shown in red, positive balances in green
+- **Credit Information**: Shows both available credit and total credit limit
+- **Fallback**: If no `creditLimit` is provided, the credit-specific section is hidden
+
+```tsx
+// Example credit account data
+const creditAccount = {
+  id: "acc-3",
+  name: "Credit Card",
+  type: "credit",
+  balance: -1250.75, // Negative indicates debt
+  currency: "USD",
+  creditLimit: 5000, // Required for available credit calculation
+  lastUpdated: new Date(),
+  accountNumber: "****9012"
+};
+```
+
+**Available Credit Calculation:**
+- Current debt: $1,250.75 (absolute value of negative balance)
+- Credit limit: $5,000.00
+- Available credit: $3,749.25 ($5,000 - $1,250.75)
 
 ## Development
 

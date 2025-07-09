@@ -45,6 +45,20 @@ export function AccountCard({ account, className }: AccountCardProps) {
 			: "text-red-600 dark:text-red-400";
 	};
 
+	/**
+	 * Calculate available credit for credit accounts
+	 * Available credit = Credit limit - Current debt (absolute value of negative balance)
+	 */
+	const getAvailableCredit = (account: Account): number => {
+		if (account.type !== "credit" || !account.creditLimit) {
+			return 0;
+		}
+
+		// For credit accounts, negative balance represents debt
+		const currentDebt = account.balance < 0 ? Math.abs(account.balance) : 0;
+		return account.creditLimit - currentDebt;
+	};
+
 	return (
 		<Card className={cn("transition-all hover:shadow-md", className)}>
 			<CardHeader className="pb-3">
@@ -103,14 +117,25 @@ export function AccountCard({ account, className }: AccountCardProps) {
 					</div>
 
 					{/* Account Type Specific Info */}
-					{account.type === "credit" && (
+					{account.type === "credit" && account.creditLimit && (
 						<div className="pt-2 border-t border-gray-100 dark:border-gray-800">
-							<div className="flex justify-between text-xs">
+							<div className="flex justify-between text-xs mb-1">
 								<span className="text-gray-500 dark:text-gray-400">
 									Available Credit
 								</span>
 								<span className="font-medium text-green-600 dark:text-green-400">
-									{formatCurrency(Math.abs(account.balance), account.currency)}
+									{formatCurrency(
+										getAvailableCredit(account),
+										account.currency,
+									)}
+								</span>
+							</div>
+							<div className="flex justify-between text-xs">
+								<span className="text-gray-500 dark:text-gray-400">
+									Credit Limit
+								</span>
+								<span className="font-medium text-gray-600 dark:text-gray-400">
+									{formatCurrency(account.creditLimit, account.currency)}
 								</span>
 							</div>
 						</div>

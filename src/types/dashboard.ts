@@ -10,6 +10,7 @@ export interface Account {
 	currency: string;
 	lastUpdated: Date;
 	accountNumber?: string;
+	creditLimit?: number; // For credit accounts - the maximum credit available
 }
 
 export interface Transaction {

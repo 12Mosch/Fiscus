@@ -21,8 +21,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { NavigationItem } from "@/types/dashboard";
 
-// Navigation items with icons
-const navigationItems: NavigationItem[] = [
+// Default navigation items with icons
+const defaultNavigationItems: NavigationItem[] = [
 	{
 		id: "dashboard",
 		label: "Dashboard",
@@ -62,7 +62,7 @@ const navigationItems: NavigationItem[] = [
 	},
 ];
 
-const bottomNavigationItems: NavigationItem[] = [
+const defaultBottomNavigationItems: NavigationItem[] = [
 	{
 		id: "settings",
 		label: "Settings",
@@ -74,11 +74,15 @@ const bottomNavigationItems: NavigationItem[] = [
 interface DashboardSidebarProps {
 	collapsed?: boolean;
 	onToggle?: () => void;
+	navigationItems?: NavigationItem[];
+	bottomNavigationItems?: NavigationItem[];
 }
 
 export function DashboardSidebar({
 	collapsed = false,
 	onToggle,
+	navigationItems = defaultNavigationItems,
+	bottomNavigationItems = defaultBottomNavigationItems,
 }: DashboardSidebarProps) {
 	const location = useLocation();
 	const currentPath = location.pathname;

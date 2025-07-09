@@ -138,13 +138,21 @@ Main layout wrapper that provides the overall structure with sidebar, header, an
 - Consistent spacing and layout
 
 #### DashboardSidebar
-Navigation sidebar with collapsible functionality.
+Navigation sidebar with collapsible functionality and configurable navigation items.
 
 **Features:**
 - Icon-based navigation
 - Active state indicators
 - Badge support for notifications
 - Responsive collapse/expand
+- Configurable navigation items through props
+- Separate main and bottom navigation sections
+
+**Props:**
+- `collapsed?: boolean` - Controls sidebar collapsed state
+- `onToggle?: () => void` - Callback for toggle button
+- `navigationItems?: NavigationItem[]` - Custom main navigation items (defaults to standard dashboard items)
+- `bottomNavigationItems?: NavigationItem[]` - Custom bottom navigation items (defaults to settings)
 
 #### DashboardHeader
 Top navigation bar with user menu, notifications, and search.

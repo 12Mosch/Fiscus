@@ -6,6 +6,9 @@ A modern desktop application built with Tauri 2.0 and React, providing a secure 
 
 - **Frontend**: React 18+ with TypeScript
 - **Routing**: Tanstack Router
+- **State Management**:
+   - **Backend**: TanStack Router loader-function
+   - **UI / Global**: Zustand
 - **Build Tool**: Vite with HMR support
 - **Backend**: Rust with Tauri 2.0
 - **Styling**: CSS with TailwindCSS and shadcn/ui integration

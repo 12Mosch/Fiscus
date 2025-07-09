@@ -47,7 +47,7 @@ export function LineChart({
 	const values = data.map((d) => d.value);
 	const minValue = Math.min(...values);
 	const maxValue = Math.max(...values);
-	const valueRange = maxValue - minValue || Math.max(1, maxValue * 0.1);
+	const valueRange = maxValue - minValue || Math.max(1, Math.abs(maxValue) * 0.1);
 
 	// Generate SVG path for the line
 	const generatePath = () => {
@@ -81,8 +81,11 @@ export function LineChart({
 	const firstValue = data[0]?.value || 0;
 	const lastValue = data[data.length - 1]?.value || 0;
 	const trend = lastValue > firstValue ? "up" : "down";
-	const trendPercentage =
-		firstValue !== 0 ? ((lastValue - firstValue) / firstValue) * 100 : 0;
+	const trendPercentage = firstValue !== 0
+		? ((lastValue - firstValue) / Math.abs(firstValue)) * 100
+		: lastValue !== 0
+			? (lastValue > 0 ? 100 : -100)
+			: 0;
 
 	return (
 		<Card className={className}>
@@ -204,7 +207,7 @@ export function LineChart({
 										fill={color}
 										stroke="white"
 										strokeWidth="2"
-										className="transition-all cursor-pointer hover:stroke-width-3"
+										className="transition-all cursor-pointer hover:stroke-[3]"
 									>
 										<title>{`${point.date}: ${formatCurrencyCompact(point.value)}`}</title>
 									</circle>

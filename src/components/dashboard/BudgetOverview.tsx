@@ -14,6 +14,7 @@ import type { BudgetOverviewProps } from "@/types/dashboard";
 
 export function BudgetOverview({ budgets, className }: BudgetOverviewProps) {
 	const calculateProgress = (spent: number, allocated: number) => {
+		if (allocated <= 0) return 0;
 		return Math.min((spent / allocated) * 100, 100);
 	};
 

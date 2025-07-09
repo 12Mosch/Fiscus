@@ -1,4 +1,4 @@
-# Fiscus - Tauri + React
+# Fiscus
 
 A modern desktop application built with Tauri 2.0 and React, providing a secure and performant cross-platform experience.
 

@@ -123,12 +123,12 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
 
 					{/* Search */}
 					<div className="relative hidden md:block">
-						<Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 z-10 pointer-events-none" />
+						<Search className="absolute left-1 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 z-10 pointer-events-none" />
 						<Input
 							placeholder="Search transactions, accounts..."
 							value={searchQuery}
 							onChange={handleSearchChange}
-							className="w-64 pl-12"
+							className="w-67 pl-10"
 						/>
 					</div>
 				</div>
@@ -265,12 +265,12 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
 			{isMobileSearchOpen && (
 				<div className="border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-6 py-3 md:hidden">
 					<div className="relative">
-						<Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 z-10 pointer-events-none" />
+						<Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 z-10 pointer-events-none" />
 						<Input
 							placeholder="Search transactions, accounts..."
 							value={searchQuery}
 							onChange={handleSearchChange}
-							className="w-full pl-12"
+							className="w-full pl-10"
 							autoFocus
 						/>
 					</div>

@@ -221,6 +221,20 @@ To ensure proper left alignment of headings in dashboard components, use the `!t
 </h1>
 ```
 
+### Search Component Spacing
+The search component in the DashboardHeader uses proper icon positioning to prevent text overlap:
+```tsx
+<div className="relative">
+    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 z-10 pointer-events-none" />
+    <Input
+        placeholder="Search transactions, accounts..."
+        className="w-64 pl-10"
+    />
+</div>
+```
+- Icon positioned at `left-3` (12px from left)
+- Input padding `pl-10` (40px) provides adequate clearance for icon + spacing
+
 ## Usage
 
 ### Basic Implementation

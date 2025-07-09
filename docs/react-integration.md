@@ -141,12 +141,36 @@ The project uses a combination of:
 - Dark mode support
 - Responsive design principles
 
+## State Management
+
+### Theme Store (`src/stores/theme-store.ts`)
+
+The application uses Zustand for theme management with the following features:
+- System theme detection and automatic updates
+- Persistent theme preferences
+- Dark/light/system theme modes
+- Proper cleanup to prevent memory leaks
+
+#### Usage
+```typescript
+import { useThemeStore, cleanupThemeStore } from "@/stores/theme-store";
+
+// In a component
+const { theme, setTheme, resolvedTheme } = useThemeStore();
+
+// Cleanup when needed (e.g., in app teardown)
+cleanupThemeStore();
+```
+
+#### Memory Management
+The theme store automatically listens to system theme changes via `matchMedia`. To prevent memory leaks in applications that dynamically create/destroy the store, call `cleanupThemeStore()` during application teardown or component unmounting.
+
 ## Next Steps
 
 1. Add unit tests using React Testing Library
 2. Implement additional Tauri plugins as needed
 3. Add more complex React components
-4. Consider state management solutions (Redux, Zustand) for larger applications
+4. Consider additional state management solutions for larger applications
 5. Implement React Router for multi-page applications
 
 ## Troubleshooting

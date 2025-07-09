@@ -96,18 +96,28 @@ export const useThemeStore = create<ThemeStore>()(
 	),
 );
 
+// Store reference to media query and handler for cleanup
+let mediaQuery: MediaQueryList | null = null;
+let handleSystemThemeChange: ((e: MediaQueryListEvent) => void) | null = null;
+
+// Export cleanup function for proper resource management
+export const cleanupThemeStore = () => {
+	if (typeof window !== "undefined" && mediaQuery && handleSystemThemeChange) {
+		mediaQuery.removeEventListener("change", handleSystemThemeChange);
+		mediaQuery = null;
+		handleSystemThemeChange = null;
+	}
+};
+
 // Initialize system theme listener
 if (typeof window !== "undefined") {
-	const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+	mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
 
-	const handleSystemThemeChange = (e: MediaQueryListEvent) => {
+	handleSystemThemeChange = (e: MediaQueryListEvent) => {
 		const systemTheme = e.matches ? "dark" : "light";
 		useThemeStore.getState().updateSystemTheme(systemTheme);
 	};
 
 	// Add listener for system theme changes
 	mediaQuery.addEventListener("change", handleSystemThemeChange);
-
-	// Clean up listener when needed (this would typically be in a useEffect cleanup)
-	// mediaQuery.removeEventListener('change', handleSystemThemeChange);
 }

@@ -21,6 +21,9 @@ import {
 	mockSpendingCategories,
 	mockTransactions,
 } from "@/data/mockData";
+import { useBudgetSummary } from "@/hooks/use-budget-summary";
+import { useChartData } from "@/hooks/use-chart-data";
+import { useDashboardMetrics } from "@/hooks/use-dashboard-metrics";
 import { BarChart } from "../charts/BarChart";
 import { LineChart } from "../charts/LineChart";
 import { PieChart } from "../charts/PieChart";
@@ -32,26 +35,13 @@ import { TransactionList } from "./TransactionList";
 export function DashboardPage() {
 	const stats = mockDashboardStats;
 
-	// Calculate additional metrics
-	const netWorth = stats.totalBalance;
-	const monthlyNet = stats.monthlyIncome - stats.monthlyExpenses;
-	const expenseRatio = (stats.monthlyExpenses / stats.monthlyIncome) * 100;
-
-	// Calculate budget summary dynamically
-	const budgetSummary = mockBudgets.reduce(
-		(acc, budget) => {
-			const spent = (budget.spent / budget.allocated) * 100;
-			if (spent > 100) {
-				acc.overLimit++;
-			} else if (spent > 90) {
-				acc.warning++;
-			} else {
-				acc.onTrack++;
-			}
-			return acc;
-		},
-		{ onTrack: 0, warning: 0, overLimit: 0 },
-	);
+	// Use custom hooks for calculations
+	const dashboardMetrics = useDashboardMetrics(stats);
+	const budgetSummary = useBudgetSummary(mockBudgets);
+	const incomeChartData = useChartData(mockIncomeExpenseHistory, {
+		labelFilter: "Income",
+		limit: 6,
+	});
 
 	return (
 		<div className="space-y-6">
@@ -129,9 +119,7 @@ export function DashboardPage() {
 				/>
 
 				<BarChart
-					data={mockIncomeExpenseHistory
-						.filter((d) => d.label === "Income")
-						.slice(0, 6)}
+					data={incomeChartData}
 					title="Monthly Income vs Expenses"
 					color="#10b981"
 					height={300}
@@ -189,7 +177,7 @@ export function DashboardPage() {
 								Net Worth
 							</span>
 							<span className="text-sm font-semibold text-gray-900 dark:text-white">
-								${netWorth.toLocaleString()}
+								${dashboardMetrics.netWorth.toLocaleString()}
 							</span>
 						</div>
 						<div className="flex items-center justify-between">
@@ -198,10 +186,12 @@ export function DashboardPage() {
 							</span>
 							<span
 								className={`text-sm font-semibold ${
-									monthlyNet >= 0 ? "text-green-600" : "text-red-600"
+									dashboardMetrics.monthlyNet >= 0
+										? "text-green-600"
+										: "text-red-600"
 								}`}
 							>
-								${monthlyNet.toLocaleString()}
+								${dashboardMetrics.monthlyNet.toLocaleString()}
 							</span>
 						</div>
 						<div className="flex items-center justify-between">
@@ -209,7 +199,7 @@ export function DashboardPage() {
 								Expense Ratio
 							</span>
 							<span className="text-sm font-semibold text-gray-900 dark:text-white">
-								{expenseRatio.toFixed(1)}%
+								{dashboardMetrics.expenseRatioFormatted}
 							</span>
 						</div>
 					</div>

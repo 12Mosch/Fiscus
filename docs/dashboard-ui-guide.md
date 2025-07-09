@@ -206,6 +206,21 @@ Built on top of shadcn/ui components:
 - Progress bars and separators
 - Consistent design system
 
+### Global CSS Override Notes
+The project has a global CSS rule in `src/styles.css` that centers all h1 elements:
+```css
+h1 {
+    text-align: center;
+}
+```
+
+To ensure proper left alignment of headings in dashboard components, use the `!text-left` TailwindCSS class to override this global rule:
+```tsx
+<h1 className="text-2xl font-bold text-gray-900 dark:text-white !text-left">
+    Dashboard
+</h1>
+```
+
 ## Usage
 
 ### Basic Implementation

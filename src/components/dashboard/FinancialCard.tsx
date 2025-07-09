@@ -28,7 +28,7 @@ export function FinancialCard({
 
 	const formatChange = (changeValue: number) => {
 		const formatted = Math.abs(changeValue).toFixed(1);
-		return `${changeValue >= 0 ? "+" : "-"}${formatted}%`;
+		return changeValue === 0 ? `${formatted}%` : `${changeValue >= 0 ? "+" : "-"}${formatted}%`;
 	};
 
 	return (

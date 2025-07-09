@@ -14,6 +14,7 @@
 	},
 	"linter": {
 		"enabled": true,
+		"includes": ["**/src/**", "!**/routeTree.gen.ts"],
 		"rules": {
 			"recommended": true
 		}

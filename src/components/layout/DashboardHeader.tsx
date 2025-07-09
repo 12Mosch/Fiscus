@@ -3,7 +3,18 @@
  * Top navigation bar with user menu, notifications, and mobile menu toggle
  */
 
-import { Bell, LogOut, Menu, Search, Settings, User } from "lucide-react";
+import {
+	AlertCircle,
+	AlertTriangle,
+	Bell,
+	CheckCircle,
+	Info,
+	LogOut,
+	Menu,
+	Search,
+	Settings,
+	User,
+} from "lucide-react";
 import { useState } from "react";
 import { ModeToggle } from "@/components/mode-toggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -47,7 +58,6 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
 
 	const handleSearch = (query: string) => {
 		// TODO: Implement actual search functionality
-		// TODO: Add debouncing to search functionality
 		// This could filter transactions, accounts, etc.
 		console.log("Searching for:", query);
 	};
@@ -59,6 +69,7 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
 	const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const query = e.target.value;
 		setSearchQuery(query);
+		// TODO: Add debouncing to search functionality
 		// Debounce search or trigger on enter
 		if (query.length > 2 || query.length === 0) {
 			handleSearch(query);
@@ -75,13 +86,13 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
 		const iconClass = "h-4 w-4";
 		switch (type) {
 			case "error":
-				return <div className={`${iconClass} text-red-500`}>⚠</div>;
+				return <AlertTriangle className={`${iconClass} text-red-500`} />;
 			case "warning":
-				return <div className={`${iconClass} text-yellow-500`}>⚠</div>;
+				return <AlertCircle className={`${iconClass} text-yellow-500`} />;
 			case "success":
-				return <div className={`${iconClass} text-green-500`}>✓</div>;
+				return <CheckCircle className={`${iconClass} text-green-500`} />;
 			default:
-				return <div className={`${iconClass} text-blue-500`}>ℹ</div>;
+				return <Info className={`${iconClass} text-blue-500`} />;
 		}
 	};
 

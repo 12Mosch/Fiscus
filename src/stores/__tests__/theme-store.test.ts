@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock document.documentElement before importing the store
 Object.defineProperty(document, "documentElement", {
@@ -12,7 +12,7 @@ Object.defineProperty(document, "documentElement", {
 });
 
 // Import after mocks are set up
-import { useThemeStore, cleanupThemeStore } from "../theme-store";
+import { cleanupThemeStore, useThemeStore } from "../theme-store";
 
 beforeEach(() => {
 	// Reset document.documentElement mocks

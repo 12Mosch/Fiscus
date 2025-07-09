@@ -37,6 +37,22 @@ export function DashboardPage() {
 	const monthlyNet = stats.monthlyIncome - stats.monthlyExpenses;
 	const expenseRatio = (stats.monthlyExpenses / stats.monthlyIncome) * 100;
 
+	// Calculate budget summary dynamically
+	const budgetSummary = mockBudgets.reduce(
+		(acc, budget) => {
+			const spent = (budget.spent / budget.allocated) * 100;
+			if (spent > 100) {
+				acc.overLimit++;
+			} else if (spent > 90) {
+				acc.warning++;
+			} else {
+				acc.onTrack++;
+			}
+			return acc;
+		},
+		{ onTrack: 0, warning: 0, overLimit: 0 },
+	);
+
 	return (
 		<div className="space-y-6">
 			{/* Page Header */}
@@ -266,7 +282,8 @@ export function DashboardPage() {
 									{mockBudgets.length} Active Budgets
 								</p>
 								<p className="text-xs text-gray-500 dark:text-gray-400">
-									3 on track, 1 over limit
+									{budgetSummary.onTrack} on track, {budgetSummary.overLimit}{" "}
+									over limit
 								</p>
 							</div>
 						</div>

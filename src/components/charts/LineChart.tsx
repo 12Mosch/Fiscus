@@ -4,6 +4,7 @@
  */
 
 import { TrendingDown, TrendingUp } from "lucide-react";
+import { useId } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { LineChartProps } from "@/types/dashboard";
@@ -15,6 +16,11 @@ export function LineChart({
 	height = 200,
 	className,
 }: LineChartProps) {
+	// Generate unique IDs for accessibility and SVG elements
+	const chartId = useId();
+	const titleId = `line-chart-title-${chartId}`;
+	const gradientId = `gradient-${chartId}`;
+
 	if (!data || data.length === 0) {
 		return (
 			<Card className={className}>
@@ -40,7 +46,7 @@ export function LineChart({
 	const values = data.map((d) => d.value);
 	const minValue = Math.min(...values);
 	const maxValue = Math.max(...values);
-	const valueRange = maxValue - minValue || 1;
+	const valueRange = maxValue - minValue || Math.max(1, maxValue * 0.1);
 
 	// Generate SVG path for the line
 	const generatePath = () => {
@@ -121,20 +127,14 @@ export function LineChart({
 						viewBox={`0 0 ${chartWidth + padding * 2} ${height}`}
 						className="overflow-visible"
 						role="img"
-						aria-labelledby={`line-chart-title-${title.replace(/\s+/g, "-")}`}
+						aria-labelledby={titleId}
 					>
-						<title id={`line-chart-title-${title.replace(/\s+/g, "-")}`}>
+						<title id={titleId}>
 							{title} - Line chart showing financial data trends over time
 						</title>
 						{/* Gradient Definition */}
 						<defs>
-							<linearGradient
-								id={`gradient-${title.replace(/\s+/g, "-")}`}
-								x1="0%"
-								y1="0%"
-								x2="0%"
-								y2="100%"
-							>
+							<linearGradient id={gradientId} x1="0%" y1="0%" x2="0%" y2="100%">
 								<stop offset="0%" stopColor={color} stopOpacity="0.3" />
 								<stop offset="100%" stopColor={color} stopOpacity="0.05" />
 							</linearGradient>
@@ -181,10 +181,7 @@ export function LineChart({
 
 						{/* Area Fill */}
 						<g transform={`translate(${padding}, ${padding})`}>
-							<path
-								d={generateAreaPath()}
-								fill={`url(#gradient-${title.replace(/\s+/g, "-")})`}
-							/>
+							<path d={generateAreaPath()} fill={`url(#${gradientId})`} />
 						</g>
 
 						{/* Line */}

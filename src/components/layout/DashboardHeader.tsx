@@ -13,7 +13,7 @@ import {
 	Sun,
 	User,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,8 +41,15 @@ interface DashboardHeaderProps {
 }
 
 export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
-	const [isDarkMode, setIsDarkMode] = useState(false);
+	const [isDarkMode, setIsDarkMode] = useState(
+		document.documentElement.classList.contains("dark"),
+	);
 	const [searchQuery, setSearchQuery] = useState("");
+
+	// Sync dark mode state with DOM on mount
+	useEffect(() => {
+		setIsDarkMode(document.documentElement.classList.contains("dark"));
+	}, []);
 
 	// Mock user data
 	const user = {
@@ -54,9 +61,9 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
 	const unreadNotifications = mockNotifications.filter((n) => !n.read);
 
 	const toggleDarkMode = () => {
-		setIsDarkMode(!isDarkMode);
-		// In a real app, this would update the theme
-		document.documentElement.classList.toggle("dark");
+		const newDarkMode = !isDarkMode;
+		setIsDarkMode(newDarkMode);
+		document.documentElement.classList.toggle("dark", newDarkMode);
 	};
 
 	const handleNotificationClick = (notification: NotificationItem) => {

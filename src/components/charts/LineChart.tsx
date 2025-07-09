@@ -213,7 +213,7 @@ export function LineChart({
 										fill={color}
 										stroke="white"
 										strokeWidth="2"
-										className="hover:r-4 transition-all cursor-pointer"
+										className="transition-all cursor-pointer hover:stroke-width-3"
 									>
 										<title>{`${point.date}: ${formatValue(point.value)}`}</title>
 									</circle>

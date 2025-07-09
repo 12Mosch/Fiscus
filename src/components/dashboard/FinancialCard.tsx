@@ -19,7 +19,7 @@ export function FinancialCard({
 		if (typeof val === "number") {
 			return new Intl.NumberFormat("en-US", {
 				style: "currency",
-				currency: "USD",
+				currency: "USD", // TODO: Make currency configurable
 				minimumFractionDigits: 0,
 				maximumFractionDigits: 2,
 			}).format(val);
@@ -47,11 +47,18 @@ export function FinancialCard({
 				{change && (
 					<div className="mt-2 flex items-center text-xs">
 						{change.type === "increase" ? (
-							<TrendingUp className="mr-1 h-3 w-3 text-green-500" />
+							<TrendingUp
+								className="mr-1 h-3 w-3 text-green-500"
+								aria-hidden="true"
+							/>
 						) : (
-							<TrendingDown className="mr-1 h-3 w-3 text-red-500" />
+							<TrendingDown
+								className="mr-1 h-3 w-3 text-red-500"
+								aria-hidden="true"
+							/>
 						)}
 						<span
+							aria-label={`${change.type === "increase" ? "Increased" : "Decreased"} by ${formatChange(change.value)}`}
 							className={cn(
 								"font-medium",
 								change.type === "increase" ? "text-green-600" : "text-red-600",

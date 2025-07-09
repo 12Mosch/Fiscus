@@ -38,7 +38,9 @@ export function BarChart({
 	const barWidth = Math.max(8, Math.min(maxBarWidth, 40));
 	const barSpacing = Math.max(
 		4,
-		(chartWidth * 0.8 - barWidth * data.length) / (data.length - 1),
+		data.length > 1
+			? (chartWidth * 0.8 - barWidth * data.length) / (data.length - 1)
+			: 4,
 	);
 	const values = data.map((d) => Math.abs(d.value));
 	const maxValue = Math.max(...values) || 1;

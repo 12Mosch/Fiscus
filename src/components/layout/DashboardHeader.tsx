@@ -47,6 +47,7 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
 
 	const handleSearch = (query: string) => {
 		// TODO: Implement actual search functionality
+		// TODO: Add debouncing to search functionality
 		// This could filter transactions, accounts, etc.
 		console.log("Searching for:", query);
 	};

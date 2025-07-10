@@ -28,7 +28,9 @@ export function FinancialCard({
 
 	const formatChange = (changeValue: number) => {
 		const formatted = Math.abs(changeValue).toFixed(1);
-		return changeValue === 0 ? `${formatted}%` : `${changeValue >= 0 ? "+" : "-"}${formatted}%`;
+		return changeValue === 0
+			? `${formatted}%`
+			: `${changeValue >= 0 ? "+" : "-"}${formatted}%`;
 	};
 
 	return (
@@ -57,7 +59,6 @@ export function FinancialCard({
 							/>
 						)}
 						<span
-							aria-label={`${change.type === "increase" ? "Increased" : "Decreased"} by ${formatChange(change.value)}`}
 							className={cn(
 								"font-medium",
 								change.type === "increase" ? "text-green-600" : "text-red-600",

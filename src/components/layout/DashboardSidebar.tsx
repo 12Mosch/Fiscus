@@ -26,7 +26,7 @@ const defaultNavigationItems: NavigationItem[] = [
 	{
 		id: "dashboard",
 		label: "Dashboard",
-		href: "/dashboard",
+		href: "/",
 		icon: <LayoutDashboard className="h-5 w-5" />,
 	},
 	{

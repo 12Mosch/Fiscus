@@ -1,13 +1,20 @@
+/**
+ * Dashboard Route
+ * Main dashboard route with layout and page components
+ */
+
 import { createFileRoute } from "@tanstack/react-router";
+import { DashboardPage } from "@/components/dashboard/DashboardPage";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
 
 export const Route = createFileRoute("/")({
-	component: Index,
+	component: Dashboard,
 });
 
-function Index() {
+function Dashboard() {
 	return (
-		<div className="p-2">
-			<h3>Welcome Home!</h3>
-		</div>
+		<DashboardLayout>
+			<DashboardPage />
+		</DashboardLayout>
 	);
 }

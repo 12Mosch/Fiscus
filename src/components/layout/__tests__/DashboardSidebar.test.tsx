@@ -13,7 +13,7 @@ vi.mock("@tanstack/react-router", async (importOriginal) => {
 	const actual = (await importOriginal()) as Record<string, unknown>;
 	return {
 		...actual,
-		useLocation: () => ({ pathname: "/dashboard" }),
+		useLocation: () => ({ pathname: "/" }),
 		Link: ({
 			children,
 			to,

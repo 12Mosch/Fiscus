@@ -22,7 +22,8 @@ export { AccountRepository } from "./repositories/accounts";
 // Repository classes
 export { BaseRepository } from "./repositories/base";
 export { TransactionRepository } from "./repositories/transactions";
-
+// Seeding utilities (development only)
+export * from "./seeding";
 // Type definitions
 export type * from "./types";
 

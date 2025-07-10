@@ -184,7 +184,7 @@ export class AccountRepository extends BaseRepository<Account> {
 - [x] Implement specific repositories for each entity
 - [x] Add database connection management
 - [x] Create database testing utilities
-- [ ] Create database seeding for development
+- [x] Create database seeding for development
 - [ ] Add database backup and restore functionality
 - [ ] Implement database performance monitoring
 

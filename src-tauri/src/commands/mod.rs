@@ -1,0 +1,19 @@
+pub mod accounts;
+/// Tauri commands organized by domain
+/// This module provides a clean separation of concerns for different
+/// areas of the personal finance application
+pub mod auth;
+pub mod budgets;
+pub mod categories;
+pub mod goals;
+pub mod reports;
+pub mod transactions;
+
+// Re-export all command functions for easy registration
+pub use accounts::*;
+pub use auth::*;
+pub use budgets::*;
+pub use categories::*;
+pub use goals::*;
+pub use reports::*;
+pub use transactions::*;

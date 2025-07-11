@@ -82,6 +82,7 @@ describe("useBudgetSummary", () => {
 	});
 
 	it("should handle null/undefined budget array", () => {
+		// biome-ignore lint/suspicious/noExplicitAny: Testing null handling behavior
 		const { result } = renderHook(() => useBudgetSummary(null as any));
 
 		expect(result.current.onTrack).toBe(0);

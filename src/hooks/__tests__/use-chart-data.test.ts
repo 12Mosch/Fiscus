@@ -74,6 +74,7 @@ describe("useChartData", () => {
 	});
 
 	it("should handle null/undefined data", () => {
+		// biome-ignore lint/suspicious/noExplicitAny: Testing null handling behavior
 		const { result } = renderHook(() => useChartData(null as any));
 
 		expect(result.current).toEqual([]);

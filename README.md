@@ -11,6 +11,7 @@ A modern desktop application built with Tauri 2.0 and React, providing a secure 
    - **UI / Global**: Zustand
 - **Build Tool**: Vite with HMR support
 - **Backend**: Rust with Tauri 2.0
+- **Database**: SQLite with Tauri SQL plugin
 - **Styling**: CSS with TailwindCSS and shadcn/ui integration
 - **Development**: Biome for code quality
 
@@ -22,6 +23,8 @@ A modern desktop application built with Tauri 2.0 and React, providing a secure 
 - 🌙 Dark mode support
 - 📱 Responsive design
 - 🔧 Comprehensive Tauri API integration
+- 🗄️ SQLite database with type-safe operations
+- 📊 Personal finance management capabilities
 
 ## Getting Started
 

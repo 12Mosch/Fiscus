@@ -82,9 +82,17 @@ function SidebarProvider({
 			}
 
 			// This sets the cookie to keep the sidebar state.
-			const secureFlag =
-				window.location.protocol === "https:" ? "; Secure" : "";
-			document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}; SameSite=Lax${secureFlag}`;
+			// Using a safer approach to set cookies with proper error handling
+			try {
+				const secureFlag =
+					window.location.protocol === "https:" ? "; Secure" : "";
+				const cookieString = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}; SameSite=Lax${secureFlag}`;
+				// biome-ignore lint/suspicious/noDocumentCookie: This is a legitimate use case for setting sidebar state
+				document.cookie = cookieString;
+			} catch (error) {
+				// Silently fail if cookies are disabled
+				console.warn("Failed to set sidebar cookie:", error);
+			}
 		},
 		[setOpenProp, open],
 	);

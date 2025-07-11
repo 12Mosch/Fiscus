@@ -191,35 +191,132 @@ export const dbUtils = {
 
 	/**
 	 * Get date range for common periods
+	 * Handles edge cases like month-end dates and timezone considerations
 	 */
 	getDateRange(period: "today" | "week" | "month" | "quarter" | "year"): {
 		start: string;
 		end: string;
 	} {
+		// Helper function to format date in local timezone as YYYY-MM-DD
+		const formatLocalDate = (date: Date): string => {
+			const year = date.getFullYear();
+			const month = String(date.getMonth() + 1).padStart(2, "0");
+			const day = String(date.getDate()).padStart(2, "0");
+			return `${year}-${month}-${day}`;
+		};
+
+		// Use local timezone for consistent date calculations
 		const now = new Date();
 		const start = new Date();
 
 		switch (period) {
-			case "today":
+			case "today": {
+				// Start of today in local timezone
 				start.setHours(0, 0, 0, 0);
 				break;
-			case "week":
+			}
+			case "week": {
+				// Exactly 7 days ago from now
 				start.setDate(now.getDate() - 7);
+				start.setHours(0, 0, 0, 0);
 				break;
-			case "month":
-				start.setMonth(now.getMonth() - 1);
+			}
+			case "month": {
+				// Start of the same day in the previous month
+				// Handle month-end edge cases properly
+				const currentMonth = now.getMonth();
+				const currentYear = now.getFullYear();
+				const currentDay = now.getDate();
+
+				// Go to previous month
+				let targetMonth = currentMonth - 1;
+				let targetYear = currentYear;
+
+				if (targetMonth < 0) {
+					targetMonth = 11;
+					targetYear--;
+				}
+
+				// Get the last day of the target month
+				const lastDayOfTargetMonth = new Date(
+					targetYear,
+					targetMonth + 1,
+					0,
+				).getDate();
+
+				// Use the current day or the last day of target month, whichever is smaller
+				const targetDay = Math.min(currentDay, lastDayOfTargetMonth);
+
+				start.setFullYear(targetYear, targetMonth, targetDay);
+				start.setHours(0, 0, 0, 0);
 				break;
-			case "quarter":
-				start.setMonth(now.getMonth() - 3);
+			}
+			case "quarter": {
+				// Start of the same day 3 months ago
+				// Handle quarter-end edge cases properly
+				const quarterCurrentMonth = now.getMonth();
+				const quarterCurrentYear = now.getFullYear();
+				const quarterCurrentDay = now.getDate();
+
+				// Go back 3 months
+				let quarterTargetMonth = quarterCurrentMonth - 3;
+				let quarterTargetYear = quarterCurrentYear;
+
+				if (quarterTargetMonth < 0) {
+					quarterTargetMonth += 12;
+					quarterTargetYear--;
+				}
+
+				// Get the last day of the target month
+				const lastDayOfQuarterTargetMonth = new Date(
+					quarterTargetYear,
+					quarterTargetMonth + 1,
+					0,
+				).getDate();
+
+				// Use the current day or the last day of target month, whichever is smaller
+				const quarterTargetDay = Math.min(
+					quarterCurrentDay,
+					lastDayOfQuarterTargetMonth,
+				);
+
+				start.setFullYear(
+					quarterTargetYear,
+					quarterTargetMonth,
+					quarterTargetDay,
+				);
+				start.setHours(0, 0, 0, 0);
 				break;
-			case "year":
-				start.setFullYear(now.getFullYear() - 1);
+			}
+			case "year": {
+				// Exactly one year ago from today
+				const yearCurrentYear = now.getFullYear();
+				const yearCurrentMonth = now.getMonth();
+				const yearCurrentDay = now.getDate();
+
+				// Handle leap year edge case (Feb 29 -> Feb 28)
+				let yearTargetDay = yearCurrentDay;
+				if (yearCurrentMonth === 1 && yearCurrentDay === 29) {
+					// Feb 29 in a leap year
+					const targetYear = yearCurrentYear - 1;
+					const isTargetLeapYear =
+						(targetYear % 4 === 0 && targetYear % 100 !== 0) ||
+						targetYear % 400 === 0;
+					if (!isTargetLeapYear) {
+						yearTargetDay = 28; // Feb 28 in non-leap year
+					}
+				}
+
+				start.setFullYear(yearCurrentYear - 1, yearCurrentMonth, yearTargetDay);
+				start.setHours(0, 0, 0, 0);
 				break;
+			}
 		}
 
+		// Use local date formatting to avoid timezone issues
 		return {
-			start: formatDateForDb(start),
-			end: formatDateForDb(now),
+			start: formatLocalDate(start),
+			end: formatLocalDate(now),
 		};
 	},
 };

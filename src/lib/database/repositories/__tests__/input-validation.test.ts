@@ -8,12 +8,9 @@ import { BaseRepository } from "../base";
 
 // Mock entity types for testing
 interface TestEntity extends BaseEntity {
-	id: string;
 	name: string;
 	description?: string;
 	value: number;
-	created_at: string;
-	updated_at?: string;
 }
 
 interface TestCreateInput extends Record<string, unknown> {

@@ -84,11 +84,9 @@ describe("Database Integration", () => {
 
 	describe("Account Operations", () => {
 		let testUserId: string;
-		let _testAccountId: string;
 
 		beforeEach(() => {
 			testUserId = generateId();
-			_testAccountId = generateId();
 		});
 
 		it("should create an account", async () => {
@@ -111,8 +109,6 @@ describe("Database Integration", () => {
 			expect(account.name).toBe(accountData.name);
 			expect(account.current_balance).toBe(accountData.current_balance);
 			expect(account.user_id).toBe(testUserId);
-
-			_testAccountId = account.id;
 		});
 
 		it("should find account by id", async () => {

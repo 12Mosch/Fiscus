@@ -295,7 +295,7 @@ export class TransactionRepository extends BaseRepository<
 				payee: row.payee ?? undefined,
 				tags: row.tags ?? undefined,
 				created_at: row.created_at,
-				updated_at: row.updated_at ?? undefined,
+				updated_at: row.updated_at || row.created_at,
 				account: {
 					id: row.account_id,
 					user_id: row.account_user_id,
@@ -309,7 +309,7 @@ export class TransactionRepository extends BaseRepository<
 					institution_name: row.account_institution_name ?? undefined,
 					account_number: row.account_account_number ?? undefined,
 					created_at: row.account_created_at,
-					updated_at: row.account_updated_at ?? undefined,
+					updated_at: row.account_updated_at || row.account_created_at,
 				},
 				category:
 					row.category_id && row.category_user_id
@@ -325,7 +325,8 @@ export class TransactionRepository extends BaseRepository<
 								is_income: row.category_is_income ?? false,
 								is_active: row.category_is_active ?? true,
 								created_at: row.category_created_at ?? "",
-								updated_at: row.category_updated_at ?? undefined,
+								updated_at:
+									row.category_updated_at || row.category_created_at || "",
 							}
 						: undefined,
 			}),

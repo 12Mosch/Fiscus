@@ -52,6 +52,10 @@ class TestRepository extends BaseRepository<
 		return ["name", "description", "value"];
 	}
 
+	protected getAllowedFilterFields(): string[] {
+		return ["id", "name", "description", "value", "created_at", "updated_at"];
+	}
+
 	// Expose protected methods for testing
 	public testValidateInputFields<T extends Record<string, unknown>>(
 		input: T,
@@ -67,6 +71,14 @@ class TestRepository extends BaseRepository<
 
 	public testGetAllowedUpdateFields() {
 		return this.getAllowedUpdateFields();
+	}
+
+	public testGetAllowedFilterFields() {
+		return this.getAllowedFilterFields();
+	}
+
+	public testValidateFilterFields(filters: Record<string, unknown>) {
+		return this.validateFilterFields(filters);
 	}
 }
 
@@ -218,6 +230,78 @@ describe("Input Validation Tests", () => {
 		it("should return correct update fields", () => {
 			const fields = repository.testGetAllowedUpdateFields();
 			expect(fields).toEqual(["name", "description", "value"]);
+		});
+	});
+
+	describe("getAllowedFilterFields", () => {
+		it("should return correct filter fields", () => {
+			const fields = repository.testGetAllowedFilterFields();
+			expect(fields).toEqual([
+				"id",
+				"name",
+				"description",
+				"value",
+				"created_at",
+				"updated_at",
+			]);
+		});
+	});
+
+	describe("validateFilterFields", () => {
+		it("should allow valid filter fields", () => {
+			const filters = {
+				name: "Test Name",
+				value: 100,
+				created_at: "2023-01-01",
+			};
+
+			const result = repository.testValidateFilterFields(filters);
+
+			expect(result).toEqual(filters);
+			expect(consoleSpy).not.toHaveBeenCalled();
+		});
+
+		it("should filter out invalid fields", () => {
+			const filters = {
+				name: "Test Name",
+				value: 100,
+				malicious_field: "DROP TABLE users;",
+				another_invalid: "SELECT * FROM passwords;",
+			};
+
+			const result = repository.testValidateFilterFields(filters);
+
+			expect(result).toEqual({
+				name: "Test Name",
+				value: 100,
+			});
+			expect(consoleSpy).toHaveBeenCalledWith(
+				"Invalid filter fields attempted: malicious_field, another_invalid. " +
+					"Allowed fields: id, name, description, value, created_at, updated_at",
+			);
+		});
+
+		it("should handle empty filters", () => {
+			const filters = {};
+
+			const result = repository.testValidateFilterFields(filters);
+
+			expect(result).toEqual({});
+			expect(consoleSpy).not.toHaveBeenCalled();
+		});
+
+		it("should handle filters with only invalid fields", () => {
+			const filters = {
+				"malicious; DROP TABLE users; --": "value",
+				"invalid' OR '1'='1": "another value",
+			};
+
+			const result = repository.testValidateFilterFields(filters);
+
+			expect(result).toEqual({});
+			expect(consoleSpy).toHaveBeenCalledWith(
+				expect.stringContaining("Invalid filter fields attempted"),
+			);
 		});
 	});
 

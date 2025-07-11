@@ -129,6 +129,29 @@ export class TransactionRepository extends BaseRepository<
 	}
 
 	/**
+	 * Define allowed fields for filter operations
+	 */
+	protected getAllowedFilterFields(): string[] {
+		return [
+			"id",
+			"user_id",
+			"account_id",
+			"category_id",
+			"amount",
+			"description",
+			"notes",
+			"transaction_date",
+			"transaction_type",
+			"status",
+			"reference_number",
+			"payee",
+			"tags",
+			"created_at",
+			"updated_at",
+		];
+	}
+
+	/**
 	 * Find transactions with account and category details
 	 * @param userId User ID
 	 * @param filters Transaction filters

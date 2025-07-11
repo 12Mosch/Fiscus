@@ -38,6 +38,12 @@ export abstract class BaseRepository<
 	protected abstract getAllowedUpdateFields(): string[];
 
 	/**
+	 * Define allowed fields for filter operations
+	 * Subclasses must implement this to prevent SQL injection in WHERE clauses
+	 */
+	protected abstract getAllowedFilterFields(): string[];
+
+	/**
 	 * Validate and sanitize sort field to prevent SQL injection
 	 * @param field Sort field from user input
 	 * @returns Validated field name or default
@@ -97,6 +103,36 @@ export abstract class BaseRepository<
 	}
 
 	/**
+	 * Validate filter fields to prevent SQL injection in WHERE clauses
+	 * @param filters Filter conditions to validate
+	 * @returns Validated filter object with only allowed fields
+	 */
+	protected validateFilterFields(
+		filters: Record<string, unknown>,
+	): Record<string, unknown> {
+		const allowedFields = this.getAllowedFilterFields();
+		const inputKeys = Object.keys(filters);
+		const invalidKeys = inputKeys.filter((key) => !allowedFields.includes(key));
+
+		if (invalidKeys.length > 0) {
+			console.warn(
+				`Invalid filter fields attempted: ${invalidKeys.join(", ")}. ` +
+					`Allowed fields: ${allowedFields.join(", ")}`,
+			);
+		}
+
+		// Return object with only allowed fields
+		const validatedFilters: Record<string, unknown> = {};
+		for (const key of inputKeys) {
+			if (allowedFields.includes(key)) {
+				validatedFilters[key] = filters[key];
+			}
+		}
+
+		return validatedFilters;
+	}
+
+	/**
 	 * Build secure ORDER BY clause with field validation
 	 * @param sort Sort options from user input
 	 * @param tableAlias Optional table alias for prefixing
@@ -142,14 +178,17 @@ export abstract class BaseRepository<
 		const { page = 1, limit = 50, sort } = options;
 		const offset = (page - 1) * limit;
 
+		// Validate filter fields to prevent SQL injection
+		const validatedFilters = this.validateFilterFields(filters);
+
 		// Build WHERE clause
 		const whereConditions: string[] = [];
 		const params: unknown[] = [];
 		let paramIndex = 1;
 
-		Object.entries(filters).forEach(([key, value]) => {
+		Object.entries(validatedFilters).forEach(([key, value]) => {
 			if (value !== undefined && value !== null) {
-				whereConditions.push(`${key} = $${paramIndex}`);
+				whereConditions.push(`"${key}" = $${paramIndex}`);
 				params.push(value);
 				paramIndex++;
 			}
@@ -314,13 +353,16 @@ export abstract class BaseRepository<
 	 * @returns Number of matching records
 	 */
 	async count(filters: Record<string, unknown> = {}): Promise<number> {
+		// Validate filter fields to prevent SQL injection
+		const validatedFilters = this.validateFilterFields(filters);
+
 		const whereConditions: string[] = [];
 		const params: unknown[] = [];
 		let paramIndex = 1;
 
-		Object.entries(filters).forEach(([key, value]) => {
+		Object.entries(validatedFilters).forEach(([key, value]) => {
 			if (value !== undefined && value !== null) {
-				whereConditions.push(`${key} = $${paramIndex}`);
+				whereConditions.push(`"${key}" = $${paramIndex}`);
 				params.push(value);
 				paramIndex++;
 			}
@@ -348,15 +390,25 @@ export abstract class BaseRepository<
 		value: unknown,
 		options: QueryOptions = {},
 	): Promise<T[]> {
+		// Validate field name to prevent SQL injection
+		const allowedFields = this.getAllowedFilterFields();
+		if (!allowedFields.includes(field)) {
+			console.warn(
+				`Invalid field attempted in findBy: ${field}. ` +
+					`Allowed fields: ${allowedFields.join(", ")}`,
+			);
+			return [];
+		}
+
 		const { limit = 50, sort } = options;
 
 		const orderClause = this.buildOrderByClause(sort);
 
 		const query = `
-      SELECT ${this.selectFields} 
-      FROM ${this.tableName} 
-      WHERE ${field} = $1 
-      ${orderClause} 
+      SELECT ${this.selectFields}
+      FROM ${this.tableName}
+      WHERE "${field}" = $1
+      ${orderClause}
       LIMIT $2
     `;
 

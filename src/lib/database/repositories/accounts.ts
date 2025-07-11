@@ -82,6 +82,27 @@ export class AccountRepository extends BaseRepository<
 	}
 
 	/**
+	 * Define allowed fields for filter operations
+	 */
+	protected getAllowedFilterFields(): string[] {
+		return [
+			"id",
+			"user_id",
+			"account_type_id",
+			"name",
+			"description",
+			"initial_balance",
+			"current_balance",
+			"currency",
+			"is_active",
+			"institution_name",
+			"account_number",
+			"created_at",
+			"updated_at",
+		];
+	}
+
+	/**
 	 * Find accounts with their account type information
 	 * @param userId User ID
 	 * @param filters Optional filters

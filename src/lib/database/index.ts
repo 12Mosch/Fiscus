@@ -185,7 +185,8 @@ export const dbUtils = {
 	 * Calculate percentage change between two values
 	 */
 	calculatePercentageChange(oldValue: number, newValue: number): number {
-		if (oldValue === 0) return newValue === 0 ? 0 : 100;
+		if (oldValue === 0 && newValue === 0) return 0;
+		if (oldValue === 0) return newValue > 0 ? Infinity : -Infinity;
 		return ((newValue - oldValue) / Math.abs(oldValue)) * 100;
 	},
 

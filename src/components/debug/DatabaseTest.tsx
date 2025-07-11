@@ -74,6 +74,9 @@ function DatabaseTestImpl() {
 			};
 
 			const account = await createAccount(accountData);
+			if (!account) {
+				throw new Error("Failed to create account");
+			}
 			addResult(
 				`✅ Account created: ${account.name} (ID: ${account.id.substring(0, 8)}...)`,
 			);
@@ -93,6 +96,9 @@ function DatabaseTestImpl() {
 			};
 
 			const transaction = await createTransaction(transactionData);
+			if (!transaction) {
+				throw new Error("Failed to create transaction");
+			}
 			addResult(
 				`✅ Transaction created: ${transaction.description} (${transaction.amount})`,
 			);

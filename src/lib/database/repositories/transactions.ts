@@ -2,7 +2,7 @@
  * Transaction repository for managing financial transactions
  */
 
-import { executeQuery, executeTransaction } from "../connection";
+import { executeQuery, executeTransaction, generateId } from "../connection";
 import type {
 	CategorySpending,
 	CreateTransactionInput,
@@ -208,13 +208,13 @@ export class TransactionRepository extends BaseRepository<
 		}
 
 		if (filters.min_amount !== undefined) {
-			whereConditions.push(`ABS(t.amount) >= $${paramIndex}`);
+			whereConditions.push(`t.amount >= $${paramIndex}`);
 			params.push(filters.min_amount);
 			paramIndex++;
 		}
 
 		if (filters.max_amount !== undefined) {
-			whereConditions.push(`ABS(t.amount) <= $${paramIndex}`);
+			whereConditions.push(`t.amount <= $${paramIndex}`);
 			params.push(filters.max_amount);
 			paramIndex++;
 		}
@@ -248,7 +248,7 @@ export class TransactionRepository extends BaseRepository<
         a.institution_name as account_institution_name, a.account_number as account_account_number,
         a.description as account_description, a.created_at as account_created_at,
         a.updated_at as account_updated_at,
-        c.id as category_id, c.name as category_name, c.color as category_color, 
+        c.name as category_name, c.color as category_color, 
         c.icon as category_icon, c.user_id as category_user_id,
         c.description as category_description, c.parent_category_id as category_parent_category_id,
         c.is_income as category_is_income, c.is_active as category_is_active,
@@ -360,7 +360,7 @@ export class TransactionRepository extends BaseRepository<
           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
         `,
 				params: [
-					crypto.randomUUID(),
+					generateId(),
 					input.user_id,
 					input.account_id,
 					input.category_id,

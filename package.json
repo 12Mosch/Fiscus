@@ -8,13 +8,16 @@
 		"build": "tsc && vite build",
 		"preview": "vite preview",
 		"tauri": "tauri",
-		"lint": "biome check --write",
+		"lint-js": "biome check --write",
 		"test": "vitest",
 		"coverage": "vitest run --coverage",
 		"seed": "tsx src/lib/database/seeding/seed-script.ts",
 		"seed:clear": "tsx src/lib/database/seeding/seed-script.ts clear",
 		"seed:minimal": "tsx src/lib/database/seeding/seed-script.ts minimal",
-		"seed:demo": "tsx src/lib/database/seeding/seed-script.ts demo"
+		"seed:demo": "tsx src/lib/database/seeding/seed-script.ts demo",
+		"fmt-rs": "cargo fmt",
+		"lint-rs": "cargo clippy",
+		"check-all": "npm run lint-js && npm run fmt-rs && npm run lint-rs"
 	},
 	"dependencies": {
 		"@radix-ui/react-avatar": "^1.1.10",

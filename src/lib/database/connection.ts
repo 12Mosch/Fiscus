@@ -23,7 +23,12 @@ export async function getDatabase(): Promise<Database> {
 			console.log("Database connection established successfully");
 		} catch (error) {
 			console.error("Failed to connect to database:", error);
-			throw new DatabaseError("Failed to connect to database", error);
+			throw new DatabaseError(
+				"Failed to connect to database",
+				error instanceof Error
+					? { message: error.message, stack: error.stack }
+					: error,
+			);
 		}
 	}
 	return dbInstance;
@@ -117,14 +122,26 @@ export async function executeTransaction(
 		return results;
 	} catch (error) {
 		// Rollback transaction on error
+		let rollbackError: unknown = null;
 		try {
 			await db.execute("ROLLBACK");
-		} catch (rollbackError) {
-			console.error("Failed to rollback transaction:", rollbackError);
+		} catch (rollbackErr) {
+			rollbackError = rollbackErr;
+			console.error("Failed to rollback transaction:", rollbackErr);
 		}
 
 		console.error("Transaction failed:", { commands, error });
-		throw new DatabaseError(`Transaction failed: ${error}`, error);
+
+		// Combine original error and rollback error information
+		const errorMessage = rollbackError
+			? `Transaction failed: ${error}. Additionally, rollback failed: ${rollbackError}`
+			: `Transaction failed: ${error}`;
+
+		const errorDetails = rollbackError
+			? { originalError: error, rollbackError }
+			: error;
+
+		throw new DatabaseError(errorMessage, errorDetails);
 	}
 }
 
@@ -194,24 +211,60 @@ export function generateId(): string {
  * Utility function to format dates for SQLite
  * @param date Date object or ISO string
  * @returns Formatted date string for SQLite
+ * @throws Error if the date is invalid
  */
 export function formatDateForDb(date: Date | string): string {
-	if (typeof date === "string") {
-		date = new Date(date);
+	let dateObj: Date;
+
+	if (date instanceof Date) {
+		// Use existing Date object if it's already a Date instance
+		dateObj = date;
+	} else if (typeof date === "string") {
+		// Validate string is not empty
+		if (!date.trim()) {
+			throw new Error("Date string cannot be empty");
+		}
+		dateObj = new Date(date);
+	} else {
+		throw new Error("Date must be a Date object or a valid date string");
 	}
-	return date.toISOString().split("T")[0]; // YYYY-MM-DD format
+
+	// Check if the date is valid
+	if (Number.isNaN(dateObj.getTime())) {
+		throw new Error(`Invalid date: ${date}`);
+	}
+
+	return dateObj.toISOString().split("T")[0]; // YYYY-MM-DD format
 }
 
 /**
  * Utility function to format datetime for SQLite
  * @param date Date object or ISO string
  * @returns Formatted datetime string for SQLite
+ * @throws Error if the date is invalid
  */
 export function formatDateTimeForDb(date: Date | string): string {
-	if (typeof date === "string") {
-		date = new Date(date);
+	let dateObj: Date;
+
+	if (date instanceof Date) {
+		// Use existing Date object if it's already a Date instance
+		dateObj = date;
+	} else if (typeof date === "string") {
+		// Validate string is not empty
+		if (!date.trim()) {
+			throw new Error("Date string cannot be empty");
+		}
+		dateObj = new Date(date);
+	} else {
+		throw new Error("Date must be a Date object or a valid date string");
 	}
-	return date.toISOString(); // Full ISO string
+
+	// Check if the date is valid
+	if (Number.isNaN(dateObj.getTime())) {
+		throw new Error(`Invalid date: ${date}`);
+	}
+
+	return dateObj.toISOString(); // Full ISO string
 }
 
 // Export database instance getter for direct access when needed

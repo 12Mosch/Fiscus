@@ -258,9 +258,21 @@ export class AccountRepository extends BaseRepository<
 		accountTypeId: string,
 		options: QueryOptions = {},
 	): Promise<Account[]> {
-		const filters = { user_id: userId, account_type_id: accountTypeId };
-		const result = await this.findAll(filters, options);
-		return result.data;
+		const { limit = 50, sort } = options;
+
+		const orderClause = sort
+			? `ORDER BY ${sort.field} ${sort.direction.toUpperCase()}`
+			: "ORDER BY created_at DESC";
+
+		const query = `
+      SELECT ${this.selectFields}
+      FROM ${this.tableName}
+      WHERE user_id = $1 AND account_type_id = $2
+      ${orderClause}
+      LIMIT $3
+    `;
+
+		return executeQuery<Account>(query, [userId, accountTypeId, limit]);
 	}
 
 	/**

@@ -70,7 +70,8 @@ CREATE TABLE transactions (
     status TEXT NOT NULL DEFAULT 'completed' CHECK (status IN ('pending', 'completed', 'cancelled')),
     reference_number TEXT, -- Check number, confirmation number, etc.
     payee TEXT, -- Who the transaction was with
-    tags TEXT CHECK (tags IS NULL OR json_valid(tags)), -- JSON array of tags for flexible categorization    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    tags TEXT CHECK (tags IS NULL OR json_valid(tags)), -- JSON array of tags for flexible categorization
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
@@ -87,7 +88,7 @@ CREATE TABLE transfers (
     to_transaction_id TEXT NOT NULL,
     amount DECIMAL(15,2) NOT NULL,
     description TEXT,
-    transfer_date DATE NOT NULL,
+    transfer_date DATETIME NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (from_account_id) REFERENCES accounts(id) ON DELETE CASCADE,

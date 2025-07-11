@@ -370,7 +370,7 @@ try {
 
 ### Connection Management
 ```typescript
-import { isDatabaseConnected, getDatabaseVersion } from '@/lib/database';
+import { isDatabaseConnected, getDatabaseVersion, formatDateForDb, formatDateTimeForDb } from '@/lib/database';
 
 // Check connection status
 const isConnected = await isDatabaseConnected();
@@ -380,6 +380,17 @@ const version = await getDatabaseVersion();
 
 // Initialize database service
 await databaseService.initialize();
+
+// Date formatting utilities with validation
+const dateString = formatDateForDb(new Date()); // "2024-01-15"
+const dateTimeString = formatDateTimeForDb("2024-01-15T10:30:00Z"); // "2024-01-15T10:30:00.000Z"
+
+// Error handling for invalid dates
+try {
+  formatDateForDb("invalid-date");
+} catch (error) {
+  console.error("Invalid date provided:", error.message);
+}
 ```
 
 ## Testing

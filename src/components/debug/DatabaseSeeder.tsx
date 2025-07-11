@@ -52,9 +52,9 @@ export function DatabaseSeeder() {
 	}
 
 	const handleSeed = async (presetName: string) => {
-			clearError();
-			const options = SEEDING_PRESETS[presetName];
-			await seed(options);
+		clearError();
+		const options = SEEDING_PRESETS[presetName];
+		await seed(options);
 	};
 
 	const handleClear = async () => {
@@ -67,9 +67,9 @@ export function DatabaseSeeder() {
 	};
 
 	const handleSeedWithClear = async (presetName: string) => {
-			clearError();
-			const options = SEEDING_PRESETS[presetName];
-			await seedWithClear(options);
+		clearError();
+		const options = SEEDING_PRESETS[presetName];
+		await seedWithClear(options);
 	};
 
 	const isLoading = isSeeding || isClearing;

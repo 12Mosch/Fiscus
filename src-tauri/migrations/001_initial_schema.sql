@@ -65,13 +65,12 @@ CREATE TABLE transactions (
     amount DECIMAL(15,2) NOT NULL,
     description TEXT NOT NULL,
     notes TEXT,
-    transaction_date DATE NOT NULL,
+    transaction_date DATETIME NOT NULL,
     transaction_type TEXT NOT NULL CHECK (transaction_type IN ('income', 'expense', 'transfer')),
     status TEXT NOT NULL DEFAULT 'completed' CHECK (status IN ('pending', 'completed', 'cancelled')),
     reference_number TEXT, -- Check number, confirmation number, etc.
     payee TEXT, -- Who the transaction was with
-    tags TEXT, -- JSON array of tags for flexible categorization
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    tags TEXT CHECK (tags IS NULL OR json_valid(tags)), -- JSON array of tags for flexible categorization    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,

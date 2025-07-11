@@ -79,8 +79,8 @@ export class AccountRepository extends BaseRepository<
         a.initial_balance, a.current_balance, a.currency, a.is_active,
         a.institution_name, a.account_number, a.created_at, a.updated_at,
         at.id as account_type_id, at.name as account_type_name,
-        at.description as account_type_description, at.is_asset as account_type_is_asset
-      FROM accounts a
+		at.description as account_type_description, at.is_asset as account_type_is_asset,
+		at.created_at as account_type_created_at      FROM accounts a
       JOIN account_types at ON a.account_type_id = at.id
       ${whereClause}
       ${orderClause}
@@ -122,7 +122,7 @@ export class AccountRepository extends BaseRepository<
 					name: row.account_type_name as string,
 					description: row.account_type_description as string | undefined,
 					is_asset: row.account_type_is_asset as boolean,
-					created_at: row.created_at as string,
+					created_at: row.created_type_at as string,
 				},
 			}),
 		);
@@ -163,7 +163,7 @@ export class AccountRepository extends BaseRepository<
         a.current_balance,
         a.currency
       FROM accounts a
-      WHERE a.user_id = $1 AND a.is_active = 1
+      WHERE a.user_id = $1 AND a.is_active = true
       ORDER BY a.name
     `;
 
@@ -208,7 +208,7 @@ export class AccountRepository extends BaseRepository<
       SELECT COALESCE(SUM(a.current_balance), 0) as total
       FROM accounts a
       JOIN account_types at ON a.account_type_id = at.id
-      WHERE a.user_id = $1 AND a.is_active = 1 AND at.is_asset = 1
+      WHERE a.user_id = $1 AND a.is_active = true AND at.is_asset = true
     `;
 
 		const result = await executeQuery<{ total: number }>(query, [userId]);
@@ -225,7 +225,7 @@ export class AccountRepository extends BaseRepository<
       SELECT COALESCE(SUM(ABS(a.current_balance)), 0) as total
       FROM accounts a
       JOIN account_types at ON a.account_type_id = at.id
-      WHERE a.user_id = $1 AND a.is_active = 1 AND at.is_asset = 0
+      WHERE a.user_id = $1 AND a.is_active = true AND at.is_asset = false
     `;
 
 		const result = await executeQuery<{ total: number }>(query, [userId]);

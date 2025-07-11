@@ -1,7 +1,7 @@
 /**
  * Database Test Component
  * A simple component to test database operations in the Tauri environment
- * This can be temporarily added to the app to verify database functionality
+ * This component is only available in development builds and will be excluded from production
  */
 
 import { useState } from "react";
@@ -25,7 +25,8 @@ import type {
 	CreateTransactionInput,
 } from "@/lib/database/types";
 
-export function DatabaseTest() {
+// Development-only component that gets tree-shaken in production
+function DatabaseTestImpl() {
 	const [testResults, setTestResults] = useState<string[]>([]);
 	const [isRunning, setIsRunning] = useState(false);
 	const { connected, version, loading: statusLoading } = useDatabaseStatus();
@@ -215,16 +216,31 @@ export function DatabaseTest() {
 				</div>
 
 				{/* Usage Note */}
-				<div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg border border-yellow-200 dark:border-yellow-800">
-					<p className="text-sm text-yellow-800 dark:text-yellow-200">
-						<strong>Note:</strong> This component is for testing purposes only.
-						Remove it from production builds or hide it behind a development
-						flag.
+				<div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg border border-green-200 dark:border-green-800">
+					<p className="text-sm text-green-800 dark:text-green-200">
+						<strong>Development Mode:</strong> This component is automatically
+						excluded from production builds. It will not be bundled or rendered
+						when NODE_ENV is set to 'production'.
 					</p>
 				</div>
 			</CardContent>
 		</Card>
 	);
 }
+
+// Conditional export based on environment
+// In production, export a null component that renders nothing
+// In development, export the full DatabaseTest component
+export const DatabaseTest =
+	process.env.NODE_ENV !== "production"
+		? DatabaseTestImpl
+		: function ProductionStub() {
+				if (process.env.NODE_ENV === "production") {
+					console.warn(
+						"DatabaseTest component is not available in production builds",
+					);
+				}
+				return null;
+			};
 
 export default DatabaseTest;

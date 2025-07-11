@@ -174,7 +174,7 @@ export class AccountRepository extends BaseRepository<
 					name: row.account_type_name as string,
 					description: row.account_type_description as string | undefined,
 					is_asset: row.account_type_is_asset as boolean,
-					created_at: row.created_type_at as string,
+					created_at: row.created_type_created_at as string,
 				},
 			}),
 		);

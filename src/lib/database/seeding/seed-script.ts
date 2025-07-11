@@ -102,6 +102,20 @@ process.on("SIGTERM", () => {
 	process.exit(0);
 });
 
+// Validate command
+const validCommands = [
+	"clear",
+	"minimal",
+	"transactions-only",
+	"clear-only",
+	"default",
+];
+if (command !== "default" && !validCommands.includes(command)) {
+	console.error(`❌ Invalid command: ${command}`);
+	console.log(`Valid commands: ${validCommands.join(", ")}`);
+	process.exit(1);
+}
+
 // Run the seeding
 runSeeding().catch((error) => {
 	console.error("❌ Unexpected error:", error);

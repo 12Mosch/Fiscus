@@ -256,7 +256,7 @@ describe("Database Hooks", () => {
 			const errorMessage = "Network timeout";
 			const genericError = new Error(errorMessage);
 			vi.mocked(databaseService.transactions.delete).mockRejectedValue(
-				genericError, 
+				genericError,
 			);
 
 			const { result } = renderHook(() => useTransactionOperations());

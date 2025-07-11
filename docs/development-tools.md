@@ -68,7 +68,7 @@ Test coverage includes:
 
 ### DatabaseSeeder Component
 
-The `DatabaseSeeder` component provides a UI interface for database seeding operations. Like the `DatabaseTest` component, it's designed for development use only.
+The `DatabaseSeeder` component provides a UI for database seeding operations. Like the `DatabaseTest` component, it's designed for development use only.
 
 #### Features
 

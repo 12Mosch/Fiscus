@@ -46,7 +46,12 @@ export async function closeDatabase(): Promise<void> {
 			console.log("Database connection closed successfully");
 		} catch (error) {
 			console.error("Failed to close database connection:", error);
-			throw new DatabaseError("Failed to close database connection", error);
+			throw new DatabaseError(
+				"Failed to close database connection",
+				error instanceof Error
+					? { message: error.message, stack: error.stack }
+					: error,
+			);
 		}
 	}
 }

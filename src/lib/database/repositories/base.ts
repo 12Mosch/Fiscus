@@ -188,7 +188,7 @@ export abstract class BaseRepository<
 
 		Object.entries(validatedFilters).forEach(([key, value]) => {
 			if (value !== undefined && value !== null) {
-				whereConditions.push(`"${key}" = $${paramIndex}`);
+				whereConditions.push(`${key} = $${paramIndex}`);
 				params.push(value);
 				paramIndex++;
 			}

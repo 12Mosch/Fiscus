@@ -153,7 +153,8 @@ export class AccountRepository extends BaseRepository<
         a.institution_name, a.account_number, a.created_at, a.updated_at,
         at.id as account_type_id, at.name as account_type_name,
 		at.description as account_type_description, at.is_asset as account_type_is_asset,
-		at.created_at as account_type_created_at      FROM accounts a
+		at.created_at as account_type_created_at
+	  	FROM accounts a
       JOIN account_types at ON a.account_type_id = at.id
       ${whereClause}
       ${orderClause}
@@ -189,7 +190,7 @@ export class AccountRepository extends BaseRepository<
 				institution_name: row.institution_name as string | undefined,
 				account_number: row.account_number as string | undefined,
 				created_at: row.created_at as string,
-				updated_at: row.updated_at as string | undefined,
+				updated_at: (row.updated_at as string) || (row.created_at as string),
 				account_type: {
 					id: row.account_type_id as string,
 					name: row.account_type_name as string,

@@ -36,6 +36,16 @@ export function useSeeding(): SeedingState & SeedingActions {
 		setState((prev) => ({ ...prev, error: null }));
 	}, []);
 
+	/**
+	 * Seeds the database with sample data.
+	 *
+	 * On error, this function updates the hook state by setting `state.error`
+	 * and then rethrows the error. Callers must catch these errors to avoid
+	 * unhandled promise rejections.
+	 *
+	 * @param options - Optional seeding configuration
+	 * @throws {Error} The original error after updating hook state
+	 */
 	const seed = useCallback(async (options?: SeedOptions) => {
 		setState((prev) => ({ ...prev, isSeeding: true, error: null }));
 
@@ -56,6 +66,15 @@ export function useSeeding(): SeedingState & SeedingActions {
 		}
 	}, []);
 
+	/**
+	 * Clears all data from the database.
+	 *
+	 * On error, this function updates the hook state by setting `state.error`
+	 * and then rethrows the error. Callers must catch these errors to avoid
+	 * unhandled promise rejections.
+	 *
+	 * @throws {Error} The original error after updating hook state
+	 */
 	const clear = useCallback(async () => {
 		setState((prev) => ({ ...prev, isClearing: true, error: null }));
 

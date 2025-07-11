@@ -219,8 +219,17 @@ export class TransactionRepository extends BaseRepository<
         t.id, t.user_id, t.account_id, t.category_id, t.amount, t.description, t.notes,
         t.transaction_date, t.transaction_type, t.status, t.reference_number, t.payee, t.tags,
         t.created_at, t.updated_at,
-        a.name as account_name, a.account_type_id,
-        c.name as category_name, c.color as category_color, c.icon as category_icon
+		a.name as account_name, a.account_type_id, a.user_id as account_user_id,
+        a.initial_balance as account_initial_balance, a.current_balance as account_current_balance,
+        a.currency as account_currency, a.is_active as account_is_active,
+        a.institution_name as account_institution_name, a.account_number as account_account_number,
+        a.description as account_description, a.created_at as account_created_at,
+        a.updated_at as account_updated_at,
+        c.id as category_id, c.name as category_name, c.color as category_color, 
+        c.icon as category_icon, c.user_id as category_user_id,
+        c.description as category_description, c.parent_category_id as category_parent_category_id,
+        c.is_income as category_is_income, c.is_active as category_is_active,
+        c.created_at as category_created_at, c.updated_at as category_updated_at
       FROM transactions t
       JOIN accounts a ON t.account_id = a.id
       LEFT JOIN categories c ON t.category_id = c.id

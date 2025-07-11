@@ -144,7 +144,8 @@ async function seedUsers(): Promise<string> {
 		username: "demo_user",
 		email: "demo@fiscus.app",
 		// Hash of "demo123" - for demo purposes only
-		password_hash: "$2b$10$xQxQ5JhUxQ5JhUxQ5JhUxO.xQxQ5JhUxQ5JhUxQ5JhUxQ5JhUxQ",
+		// Generated with: bcrypt.hashSync("demo123", 10)
+		password_hash: "$2b$10$LLGogYR2SCmGEgobPPF3ce.gtyODdqyZ6117dE3A8e2cAptAkcgh6",
 	};
 
 	const query = `

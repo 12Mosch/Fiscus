@@ -206,6 +206,11 @@ export function useTransactions(
 // Hook for account operations
 export function useAccountOperations() {
 	const { execute, loading, error } = useAsyncOperation<Account>();
+	const {
+		execute: executeDelete,
+		loading: deleteLoading,
+		error: deleteError,
+	} = useAsyncOperation<{ id: string; deleted: boolean }>();
 
 	const createAccount = useCallback(
 		async (accountData: CreateAccountInput) => {
@@ -223,11 +228,13 @@ export function useAccountOperations() {
 
 	const deleteAccount = useCallback(
 		async (id: string) => {
-			return execute(() =>
-				databaseService.accounts.delete(id).then(() => ({ id }) as Account),
+			return executeDelete(() =>
+				databaseService.accounts
+					.delete(id)
+					.then((deleted) => ({ id, deleted })),
 			);
 		},
-		[execute],
+		[executeDelete],
 	);
 
 	const updateBalance = useCallback(
@@ -242,14 +249,19 @@ export function useAccountOperations() {
 		updateAccount,
 		deleteAccount,
 		updateBalance,
-		loading,
-		error,
+		loading: loading || deleteLoading,
+		error: error || deleteError,
 	};
 }
 
 // Hook for transaction operations
 export function useTransactionOperations() {
 	const { execute, loading, error } = useAsyncOperation<Transaction>();
+	const {
+		execute: executeDelete,
+		loading: deleteLoading,
+		error: deleteError,
+	} = useAsyncOperation<{ id: string; deleted: boolean }>();
 
 	const createTransaction = useCallback(
 		async (transactionData: CreateTransactionInput) => {
@@ -269,21 +281,21 @@ export function useTransactionOperations() {
 
 	const deleteTransaction = useCallback(
 		async (id: string) => {
-			return execute(() =>
+			return executeDelete(() =>
 				databaseService.transactions
 					.delete(id)
-					.then(() => ({ id }) as Transaction),
+					.then((deleted) => ({ id, deleted })),
 			);
 		},
-		[execute],
+		[executeDelete],
 	);
 
 	return {
 		createTransaction,
 		updateTransaction,
 		deleteTransaction,
-		loading,
-		error,
+		loading: loading || deleteLoading,
+		error: error || deleteError,
 	};
 }
 

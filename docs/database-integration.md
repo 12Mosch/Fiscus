@@ -213,7 +213,7 @@ import { useAccounts, useTransactions, useAccountOperations } from '@/lib/databa
 
 function AccountsPage() {
   const { accounts, loading, error, refetch } = useAccounts('user-123');
-  const { createAccount, updateAccount, loading: operationLoading } = useAccountOperations();
+  const { createAccount, updateAccount, deleteAccount, loading: operationLoading } = useAccountOperations();
 
   const handleCreateAccount = async (accountData) => {
     try {
@@ -224,18 +224,66 @@ function AccountsPage() {
     }
   };
 
+  const handleDeleteAccount = async (accountId: string) => {
+    try {
+      const result = await deleteAccount(accountId);
+      console.log(`Account ${result.id} deleted: ${result.deleted}`);
+      refetch(); // Refresh the accounts list
+    } catch (error) {
+      console.error('Failed to delete account:', error);
+    }
+  };
+
   if (loading) return <div>Loading...</div>;
   if (error) return <div>Error: {error}</div>;
 
   return (
     <div>
       {accounts.map(account => (
-        <div key={account.id}>{account.name}: {account.current_balance}</div>
+        <div key={account.id}>
+          {account.name}: {account.current_balance}
+          <button onClick={() => handleDeleteAccount(account.id)}>Delete</button>
+        </div>
       ))}
     </div>
   );
 }
 ```
+
+### Hook Return Types
+
+All hooks follow consistent patterns for return types and error handling.
+
+#### Delete Operations Return Types
+
+The `deleteAccount` and `deleteTransaction` functions return a promise that resolves to:
+```typescript
+{ id: string; deleted: boolean }
+```
+
+This provides:
+- `id`: The ID of the deleted record
+- `deleted`: Boolean indicating whether the deletion was successful
+
+**Example Usage**:
+```typescript
+const { deleteAccount } = useAccountOperations();
+
+const handleDelete = async (accountId: string) => {
+  try {
+    const result = await deleteAccount(accountId);
+    if (result.deleted) {
+      console.log(`Successfully deleted account ${result.id}`);
+    } else {
+      console.log(`Failed to delete account ${result.id}`);
+    }
+  } catch (error) {
+    console.error('Delete operation failed:', error);
+  }
+};
+```
+
+This approach ensures type safety and prevents runtime errors that could occur with incomplete object returns.
 
 ### Advanced Queries
 

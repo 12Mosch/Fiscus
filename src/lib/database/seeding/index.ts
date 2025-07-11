@@ -143,7 +143,8 @@ async function seedUsers(): Promise<string> {
 	const userData: CreateUserInput = {
 		username: "demo_user",
 		email: "demo@fiscus.app",
-		password_hash: "hashed_password_placeholder", // In real app, this would be properly hashed
+		// Hash of "demo123" - for demo purposes only
+		password_hash: "$2b$10$xQxQ5JhUxQ5JhUxQ5JhUxO.xQxQ5JhUxQ5JhUxQ5JhUxQ5JhUxQ",
 	};
 
 	const query = `

@@ -20,6 +20,60 @@ export abstract class BaseRepository<
 	protected abstract selectFields: string;
 
 	/**
+	 * Define allowed sort fields for this repository
+	 * Subclasses must implement this to prevent SQL injection
+	 */
+	protected abstract getAllowedSortFields(): string[];
+
+	/**
+	 * Validate and sanitize sort field to prevent SQL injection
+	 * @param field Sort field from user input
+	 * @returns Validated field name or default
+	 */
+	protected validateSortField(field: string): string {
+		const allowedFields = this.getAllowedSortFields();
+		if (allowedFields.includes(field)) {
+			return field;
+		}
+
+		// Log potential security issue
+		console.warn(`Invalid sort field attempted: ${field}. Using default sort.`);
+		return "created_at"; // Safe default
+	}
+
+	/**
+	 * Validate sort direction to prevent SQL injection
+	 * @param direction Sort direction from user input
+	 * @returns Validated direction
+	 */
+	protected validateSortDirection(direction: string): "ASC" | "DESC" {
+		const normalizedDirection = direction.toLowerCase();
+		return normalizedDirection === "asc" ? "ASC" : "DESC";
+	}
+
+	/**
+	 * Build secure ORDER BY clause with field validation
+	 * @param sort Sort options from user input
+	 * @param tableAlias Optional table alias for prefixing
+	 * @returns Secure ORDER BY clause
+	 */
+	protected buildOrderByClause(
+		sort?: { field: string; direction: string },
+		tableAlias?: string,
+	): string {
+		if (!sort) {
+			const prefix = tableAlias ? `${tableAlias}.` : "";
+			return `ORDER BY ${prefix}created_at DESC`;
+		}
+
+		const validatedField = this.validateSortField(sort.field);
+		const validatedDirection = this.validateSortDirection(sort.direction);
+		const prefix = tableAlias ? `${tableAlias}.` : "";
+
+		return `ORDER BY ${prefix}"${validatedField}" ${validatedDirection}`;
+	}
+
+	/**
 	 * Find a record by ID
 	 * @param id Record ID
 	 * @returns Record or null if not found
@@ -61,10 +115,8 @@ export abstract class BaseRepository<
 				? `WHERE ${whereConditions.join(" AND ")}`
 				: "";
 
-		// Build ORDER BY clause
-		const orderClause = sort
-			? `ORDER BY ${sort.field} ${sort.direction.toUpperCase()}`
-			: "ORDER BY created_at DESC";
+		// Build ORDER BY clause with security validation
+		const orderClause = this.buildOrderByClause(sort);
 
 		// Build main query
 		const query = `
@@ -232,9 +284,7 @@ export abstract class BaseRepository<
 	): Promise<T[]> {
 		const { limit = 50, sort } = options;
 
-		const orderClause = sort
-			? `ORDER BY ${sort.field} ${sort.direction.toUpperCase()}`
-			: "ORDER BY created_at DESC";
+		const orderClause = this.buildOrderByClause(sort);
 
 		const query = `
       SELECT ${this.selectFields} 

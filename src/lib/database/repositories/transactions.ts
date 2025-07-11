@@ -71,6 +71,25 @@ export class TransactionRepository extends BaseRepository<
   `;
 
 	/**
+	 * Define allowed sort fields to prevent SQL injection
+	 */
+	protected getAllowedSortFields(): string[] {
+		return [
+			"id",
+			"amount",
+			"description",
+			"notes",
+			"transaction_date",
+			"transaction_type",
+			"status",
+			"reference_number",
+			"payee",
+			"created_at",
+			"updated_at",
+		];
+	}
+
+	/**
 	 * Find transactions with account and category details
 	 * @param userId User ID
 	 * @param filters Transaction filters
@@ -150,9 +169,9 @@ export class TransactionRepository extends BaseRepository<
 
 		const whereClause = `WHERE ${whereConditions.join(" AND ")}`;
 
-		// Build ORDER BY clause
+		// Build ORDER BY clause with security validation
 		const orderClause = sort
-			? `ORDER BY t.${sort.field} ${sort.direction.toUpperCase()}`
+			? this.buildOrderByClause(sort, "t")
 			: "ORDER BY t.transaction_date DESC, t.created_at DESC";
 
 		// Main query with JOINs

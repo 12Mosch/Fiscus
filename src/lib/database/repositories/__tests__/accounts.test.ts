@@ -61,9 +61,9 @@ describe("AccountRepository", () => {
 
 			await repository.findByType(userId, accountTypeId, options);
 
-			// Verify the query includes custom limit and sorting
+			// Verify the query includes custom limit and sorting (with quoted field name for security)
 			expect(mockExecuteQuery).toHaveBeenCalledWith(
-				expect.stringContaining("ORDER BY name ASC"),
+				expect.stringContaining('ORDER BY "name" ASC'),
 				[userId, accountTypeId, 10],
 			);
 		});

@@ -22,10 +22,29 @@ export class AccountRepository extends BaseRepository<
 > {
 	protected tableName = "accounts";
 	protected selectFields = `
-    id, user_id, account_type_id, name, description, 
+    id, user_id, account_type_id, name, description,
     initial_balance, current_balance, currency, is_active,
     institution_name, account_number, created_at, updated_at
   `;
+
+	/**
+	 * Define allowed sort fields to prevent SQL injection
+	 */
+	protected getAllowedSortFields(): string[] {
+		return [
+			"id",
+			"name",
+			"description",
+			"initial_balance",
+			"current_balance",
+			"currency",
+			"is_active",
+			"institution_name",
+			"account_number",
+			"created_at",
+			"updated_at",
+		];
+	}
 
 	/**
 	 * Find accounts with their account type information
@@ -67,10 +86,8 @@ export class AccountRepository extends BaseRepository<
 
 		const whereClause = `WHERE ${whereConditions.join(" AND ")}`;
 
-		// Build ORDER BY clause
-		const orderClause = sort
-			? `ORDER BY a.${sort.field} ${sort.direction.toUpperCase()}`
-			: "ORDER BY a.created_at DESC";
+		// Build ORDER BY clause with security validation
+		const orderClause = this.buildOrderByClause(sort, "a");
 
 		// Main query with JOIN
 		const query = `
@@ -260,9 +277,7 @@ export class AccountRepository extends BaseRepository<
 	): Promise<Account[]> {
 		const { limit = 50, sort } = options;
 
-		const orderClause = sort
-			? `ORDER BY ${sort.field} ${sort.direction.toUpperCase()}`
-			: "ORDER BY created_at DESC";
+		const orderClause = this.buildOrderByClause(sort);
 
 		const query = `
       SELECT ${this.selectFields}

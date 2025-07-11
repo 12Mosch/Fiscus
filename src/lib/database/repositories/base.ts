@@ -26,6 +26,18 @@ export abstract class BaseRepository<
 	protected abstract getAllowedSortFields(): string[];
 
 	/**
+	 * Define allowed fields for create operations
+	 * Subclasses must implement this to prevent unexpected columns
+	 */
+	protected abstract getAllowedCreateFields(): string[];
+
+	/**
+	 * Define allowed fields for update operations
+	 * Subclasses must implement this to prevent unexpected columns
+	 */
+	protected abstract getAllowedUpdateFields(): string[];
+
+	/**
 	 * Validate and sanitize sort field to prevent SQL injection
 	 * @param field Sort field from user input
 	 * @returns Validated field name or default
@@ -49,6 +61,39 @@ export abstract class BaseRepository<
 	protected validateSortDirection(direction: string): "ASC" | "DESC" {
 		const normalizedDirection = direction.toLowerCase();
 		return normalizedDirection === "asc" ? "ASC" : "DESC";
+	}
+
+	/**
+	 * Validate input object keys against allowed fields
+	 * @param input Input object to validate
+	 * @param allowedFields Array of allowed field names
+	 * @param operation Operation type for error messages
+	 * @returns Validated input object with only allowed fields
+	 */
+	protected validateInputFields<TInput extends Record<string, unknown>>(
+		input: TInput,
+		allowedFields: string[],
+		operation: string,
+	): Partial<TInput> {
+		const inputKeys = Object.keys(input);
+		const invalidKeys = inputKeys.filter((key) => !allowedFields.includes(key));
+
+		if (invalidKeys.length > 0) {
+			console.warn(
+				`Invalid fields attempted in ${operation} operation: ${invalidKeys.join(", ")}. ` +
+					`Allowed fields: ${allowedFields.join(", ")}`,
+			);
+		}
+
+		// Return object with only allowed fields
+		const validatedInput: Record<string, unknown> = {};
+		for (const key of inputKeys) {
+			if (allowedFields.includes(key)) {
+				validatedInput[key] = input[key];
+			}
+		}
+
+		return validatedInput as Partial<TInput>;
 	}
 
 	/**
@@ -158,15 +203,28 @@ export abstract class BaseRepository<
 	 * @returns Created record
 	 */
 	async create(input: TCreate): Promise<T> {
+		// Validate input fields against allowed create fields
+		const allowedFields = this.getAllowedCreateFields();
+		const validatedInput = this.validateInputFields(
+			input,
+			allowedFields,
+			"create",
+		);
+
 		const id = generateId();
 		const now = formatDateTimeForDb(new Date());
 
-		const fields = ["id", "created_at", "updated_at", ...Object.keys(input)];
-		const values = [id, now, now, ...Object.values(input)];
+		const fields = [
+			"id",
+			"created_at",
+			"updated_at",
+			...Object.keys(validatedInput),
+		];
+		const values = [id, now, now, ...Object.values(validatedInput)];
 		const placeholders = fields.map((_, index) => `$${index + 1}`).join(", ");
 
 		const query = `
-      INSERT INTO ${this.tableName} (${fields.join(", ")}) 
+      INSERT INTO ${this.tableName} (${fields.join(", ")})
       VALUES (${placeholders})
     `;
 
@@ -188,8 +246,16 @@ export abstract class BaseRepository<
 	 * @returns Updated record
 	 */
 	async update(id: string, input: Partial<TUpdate>): Promise<T> {
+		// Validate input fields against allowed update fields
+		const allowedFields = this.getAllowedUpdateFields();
+		const validatedInput = this.validateInputFields(
+			input,
+			allowedFields,
+			"update",
+		);
+
 		const now = formatDateTimeForDb(new Date());
-		const updateData = { ...input, updated_at: now };
+		const updateData = { ...validatedInput, updated_at: now };
 
 		const fields = Object.keys(updateData);
 		const values = Object.values(updateData);
@@ -198,8 +264,8 @@ export abstract class BaseRepository<
 			.join(", ");
 
 		const query = `
-      UPDATE ${this.tableName} 
-      SET ${setClause} 
+      UPDATE ${this.tableName}
+      SET ${setClause}
       WHERE id = $${fields.length + 1}
     `;
 

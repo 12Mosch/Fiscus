@@ -245,3 +245,368 @@ macro_rules! with_transaction {
         }
     }};
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_build_where_clause_empty_filters() {
+        let filters = HashMap::new();
+        let allowed_fields = &["user_id", "account_id", "category_id"];
+        let base_conditions = vec!["deleted = 0".to_string()];
+
+        let result = DatabaseUtils::build_where_clause(&filters, allowed_fields, base_conditions);
+        assert!(result.is_ok());
+
+        let (where_clause, params) = result.unwrap();
+        assert_eq!(where_clause, "WHERE deleted = 0");
+        assert!(params.is_empty());
+    }
+
+    #[test]
+    fn test_build_where_clause_basic_filters() {
+        let mut filters = HashMap::new();
+        filters.insert("user_id".to_string(), "user-123".to_string());
+        filters.insert("account_id".to_string(), "account-456".to_string());
+
+        let allowed_fields = &["user_id", "account_id", "category_id"];
+        let base_conditions = vec!["deleted = 0".to_string()];
+
+        let result = DatabaseUtils::build_where_clause(&filters, allowed_fields, base_conditions);
+        assert!(result.is_ok());
+
+        let (where_clause, params) = result.unwrap();
+        assert!(where_clause.contains("WHERE deleted = 0"));
+        assert!(where_clause.contains("`user_id` = ?"));
+        assert!(where_clause.contains("`account_id` = ?"));
+        assert_eq!(params.len(), 2);
+        assert!(params.contains(&Value::String("user-123".to_string())));
+        assert!(params.contains(&Value::String("account-456".to_string())));
+    }
+
+    #[test]
+    fn test_build_where_clause_date_filters() {
+        let mut filters = HashMap::new();
+        filters.insert("start_date".to_string(), "2023-01-01".to_string());
+        filters.insert("end_date".to_string(), "2023-12-31".to_string());
+
+        let allowed_fields = &["start_date", "end_date"];
+        let base_conditions = vec![];
+
+        let result = DatabaseUtils::build_where_clause(&filters, allowed_fields, base_conditions);
+        assert!(result.is_ok());
+
+        let (where_clause, params) = result.unwrap();
+        assert!(where_clause.contains("`transaction_date` >= ?"));
+        assert!(where_clause.contains("`transaction_date` <= ?"));
+        assert_eq!(params.len(), 2);
+        assert!(params.contains(&Value::String("2023-01-01".to_string())));
+        assert!(params.contains(&Value::String("2023-12-31".to_string())));
+    }
+
+    #[test]
+    fn test_build_where_clause_amount_filters() {
+        let mut filters = HashMap::new();
+        filters.insert("min_amount".to_string(), "10.00".to_string());
+        filters.insert("max_amount".to_string(), "100.00".to_string());
+
+        let allowed_fields = &["min_amount", "max_amount"];
+        let base_conditions = vec![];
+
+        let result = DatabaseUtils::build_where_clause(&filters, allowed_fields, base_conditions);
+        assert!(result.is_ok());
+
+        let (where_clause, params) = result.unwrap();
+        assert!(where_clause.contains("`amount` >= ?"));
+        assert!(where_clause.contains("`amount` <= ?"));
+        assert_eq!(params.len(), 2);
+        assert!(params.contains(&Value::String("10.00".to_string())));
+        assert!(params.contains(&Value::String("100.00".to_string())));
+    }
+
+    #[test]
+    fn test_build_where_clause_invalid_field() {
+        let mut filters = HashMap::new();
+        filters.insert("invalid_field".to_string(), "value".to_string());
+
+        let allowed_fields = &["user_id", "account_id"];
+        let base_conditions = vec![];
+
+        let result = DatabaseUtils::build_where_clause(&filters, allowed_fields, base_conditions);
+        assert!(result.is_err());
+
+        match result.unwrap_err() {
+            FiscusError::Security(msg) => {
+                assert!(msg.contains("Invalid filter field: invalid_field"));
+            }
+            _ => panic!("Expected Security error"),
+        }
+    }
+
+    #[test]
+    fn test_build_where_clause_sql_injection_prevention() {
+        let mut filters = HashMap::new();
+        filters.insert("user_id; DROP TABLE users".to_string(), "value".to_string());
+
+        let allowed_fields = &["user_id", "account_id"];
+        let base_conditions = vec![];
+
+        let result = DatabaseUtils::build_where_clause(&filters, allowed_fields, base_conditions);
+        assert!(result.is_err());
+
+        match result.unwrap_err() {
+            FiscusError::Security(msg) => {
+                assert!(msg.contains("Invalid filter field"));
+            }
+            _ => panic!("Expected Security error"),
+        }
+    }
+
+    #[test]
+    fn test_build_order_clause_default() {
+        let allowed_fields = &["name", "created_at", "updated_at"];
+        let result = DatabaseUtils::build_order_clause(None, None, allowed_fields, "created_at");
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "ORDER BY `created_at` ASC");
+    }
+
+    #[test]
+    fn test_build_order_clause_custom() {
+        let allowed_fields = &["name", "created_at", "updated_at"];
+        let result = DatabaseUtils::build_order_clause(
+            Some("name"),
+            Some("DESC"),
+            allowed_fields,
+            "created_at",
+        );
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "ORDER BY `name` DESC");
+    }
+
+    #[test]
+    fn test_build_order_clause_invalid_field() {
+        let allowed_fields = &["name", "created_at"];
+        let result = DatabaseUtils::build_order_clause(
+            Some("invalid_field"),
+            Some("ASC"),
+            allowed_fields,
+            "created_at",
+        );
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_build_order_clause_invalid_direction() {
+        let allowed_fields = &["name", "created_at"];
+        let result = DatabaseUtils::build_order_clause(
+            Some("name"),
+            Some("INVALID"),
+            allowed_fields,
+            "created_at",
+        );
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_build_limit_clause_both_params() {
+        let result = DatabaseUtils::build_limit_clause(Some(10), Some(20));
+        assert_eq!(result, "LIMIT 10 OFFSET 20");
+    }
+
+    #[test]
+    fn test_build_limit_clause_limit_only() {
+        let result = DatabaseUtils::build_limit_clause(Some(25), None);
+        assert_eq!(result, "LIMIT 25");
+    }
+
+    #[test]
+    fn test_build_limit_clause_offset_only() {
+        let result = DatabaseUtils::build_limit_clause(None, Some(50));
+        assert_eq!(result, "LIMIT 100 OFFSET 50");
+    }
+
+    #[test]
+    fn test_build_limit_clause_none() {
+        let result = DatabaseUtils::build_limit_clause(None, None);
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_build_limit_clause_clamping() {
+        // Test limit clamping
+        let result = DatabaseUtils::build_limit_clause(Some(2000), Some(-10));
+        assert_eq!(result, "LIMIT 1000 OFFSET 0");
+
+        let result = DatabaseUtils::build_limit_clause(Some(0), Some(5));
+        assert_eq!(result, "LIMIT 1 OFFSET 5");
+    }
+
+    #[tokio::test]
+    async fn test_execute_query_placeholder() {
+        let db = "test_db".to_string();
+        let query = "SELECT * FROM users";
+        let params = vec![];
+
+        let result: FiscusResult<Vec<serde_json::Value>> =
+            DatabaseUtils::execute_query(&db, query, params).await;
+
+        assert!(result.is_ok());
+        let data = result.unwrap();
+        assert!(data.is_empty()); // Placeholder returns empty vec
+    }
+
+    #[tokio::test]
+    async fn test_execute_query_single_placeholder() {
+        let db = "test_db".to_string();
+        let query = "SELECT * FROM users WHERE id = ?";
+        let params = vec![Value::String("user-123".to_string())];
+
+        let result: FiscusResult<Option<serde_json::Value>> =
+            DatabaseUtils::execute_query_single(&db, query, params).await;
+
+        assert!(result.is_ok());
+        let data = result.unwrap();
+        assert!(data.is_none()); // Placeholder returns None
+    }
+
+    #[tokio::test]
+    async fn test_execute_non_query_placeholder() {
+        let db = "test_db".to_string();
+        let query = "INSERT INTO users (username) VALUES (?)";
+        let params = vec![Value::String("testuser".to_string())];
+
+        let result = DatabaseUtils::execute_non_query(&db, query, params).await;
+
+        assert!(result.is_ok());
+        let affected_rows = result.unwrap();
+        assert_eq!(affected_rows, 0); // Placeholder returns 0
+    }
+
+    #[tokio::test]
+    async fn test_validate_user_exists_placeholder() {
+        let db = "test_db".to_string();
+        let user_id = "user-123";
+
+        let result = DatabaseUtils::validate_user_exists(&db, user_id).await;
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), user_id);
+    }
+
+    #[tokio::test]
+    async fn test_validate_account_ownership_placeholder() {
+        let db = "test_db".to_string();
+        let account_id = "account-123";
+        let user_id = "user-456";
+
+        let result = DatabaseUtils::validate_account_ownership(&db, account_id, user_id).await;
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_validate_category_ownership_placeholder() {
+        let db = "test_db".to_string();
+        let category_id = "category-123";
+        let user_id = "user-456";
+
+        let result = DatabaseUtils::validate_category_ownership(&db, category_id, user_id).await;
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_get_account_balance_placeholder() {
+        let db = "test_db".to_string();
+        let account_id = "account-123";
+
+        let result = DatabaseUtils::get_account_balance(&db, account_id).await;
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), rust_decimal::Decimal::ZERO);
+    }
+
+    #[tokio::test]
+    async fn test_update_account_balance_placeholder() {
+        let db = "test_db".to_string();
+        let account_id = "account-123";
+        let new_balance = rust_decimal::Decimal::new(100000, 2); // $1000.00
+
+        let result = DatabaseUtils::update_account_balance(&db, account_id, new_balance).await;
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_transaction_operations_placeholder() {
+        let db = "test_db".to_string();
+
+        // Test begin transaction
+        let result = DatabaseUtils::begin_transaction(&db).await;
+        assert!(result.is_ok());
+
+        // Test commit transaction
+        let result = DatabaseUtils::commit_transaction(&db).await;
+        assert!(result.is_ok());
+
+        // Test rollback transaction
+        let result = DatabaseUtils::rollback_transaction(&db).await;
+        assert!(result.is_ok());
+    }
+
+    // Note: Testing the with_transaction macro is complex due to its async nature
+    // and the fact that it uses the ? operator. In a real implementation with
+    // actual database connections, these would be tested through integration tests.
+
+    #[test]
+    fn test_complex_where_clause_building() {
+        let mut filters = HashMap::new();
+        filters.insert("user_id".to_string(), "user-123".to_string());
+        filters.insert("start_date".to_string(), "2023-01-01".to_string());
+        filters.insert("end_date".to_string(), "2023-12-31".to_string());
+        filters.insert("min_amount".to_string(), "10.00".to_string());
+        filters.insert("max_amount".to_string(), "1000.00".to_string());
+        filters.insert("category_id".to_string(), "category-456".to_string());
+
+        let allowed_fields = &[
+            "user_id",
+            "category_id",
+            "start_date",
+            "end_date",
+            "min_amount",
+            "max_amount",
+        ];
+        let base_conditions = vec!["deleted = 0".to_string()];
+
+        let result = DatabaseUtils::build_where_clause(&filters, allowed_fields, base_conditions);
+        assert!(result.is_ok());
+
+        let (where_clause, params) = result.unwrap();
+
+        // Check that all conditions are present
+        assert!(where_clause.contains("WHERE deleted = 0"));
+        assert!(where_clause.contains("`user_id` = ?"));
+        assert!(where_clause.contains("`category_id` = ?"));
+        assert!(where_clause.contains("`transaction_date` >= ?"));
+        assert!(where_clause.contains("`transaction_date` <= ?"));
+        assert!(where_clause.contains("`amount` >= ?"));
+        assert!(where_clause.contains("`amount` <= ?"));
+
+        // Check parameter count
+        assert_eq!(params.len(), 6);
+
+        // Check that all values are present
+        assert!(params.contains(&Value::String("user-123".to_string())));
+        assert!(params.contains(&Value::String("category-456".to_string())));
+        assert!(params.contains(&Value::String("2023-01-01".to_string())));
+        assert!(params.contains(&Value::String("2023-12-31".to_string())));
+        assert!(params.contains(&Value::String("10.00".to_string())));
+        assert!(params.contains(&Value::String("1000.00".to_string())));
+    }
+}

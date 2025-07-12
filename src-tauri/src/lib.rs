@@ -7,6 +7,12 @@ mod dto;
 mod error;
 mod models;
 
+#[cfg(test)]
+mod test_utils;
+
+#[cfg(test)]
+mod test_database;
+
 // Re-export for easier access
 pub use database::*;
 pub use dto::*;

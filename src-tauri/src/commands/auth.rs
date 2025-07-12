@@ -278,3 +278,281 @@ fn verify_password(password: &str, hash: &str) -> FiscusResult<bool> {
         .verify_password(password.as_bytes(), &parsed_hash)
         .is_ok())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_utils::TestUtils;
+
+    #[test]
+    fn test_hash_password() {
+        let password = "test_password_123";
+        let result = hash_password(password);
+
+        assert!(result.is_ok());
+        let hash = result.unwrap();
+
+        // Hash should not be empty
+        assert!(!hash.is_empty());
+
+        // Hash should be different from the original password
+        assert_ne!(hash, password);
+
+        // Hash should start with $argon2id$ (Argon2 format)
+        assert!(hash.starts_with("$argon2id$"));
+    }
+
+    #[test]
+    fn test_hash_password_different_salts() {
+        let password = "test_password_123";
+        let hash1 = hash_password(password).unwrap();
+        let hash2 = hash_password(password).unwrap();
+
+        // Same password should produce different hashes due to different salts
+        assert_ne!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_verify_password_correct() {
+        let password = "test_password_123";
+        let hash = hash_password(password).unwrap();
+
+        let result = verify_password(password, &hash);
+        assert!(result.is_ok());
+        assert!(result.unwrap());
+    }
+
+    #[test]
+    fn test_verify_password_incorrect() {
+        let password = "test_password_123";
+        let wrong_password = "wrong_password";
+        let hash = hash_password(password).unwrap();
+
+        let result = verify_password(wrong_password, &hash);
+        assert!(result.is_ok());
+        assert!(!result.unwrap());
+    }
+
+    #[test]
+    fn test_verify_password_invalid_hash() {
+        let password = "test_password_123";
+        let invalid_hash = "invalid_hash_format";
+
+        let result = verify_password(password, invalid_hash);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_create_user_validation_logic() {
+        // Test username validation
+        let result = Validator::validate_string("ab", "username", 3, 50);
+        assert!(result.is_err());
+
+        let result = Validator::validate_string("validuser", "username", 3, 50);
+        assert!(result.is_ok());
+
+        // Test password validation
+        let result = Validator::validate_string("short", "password", 8, 128);
+        assert!(result.is_err());
+
+        let result = Validator::validate_string("validpassword123", "password", 8, 128);
+        assert!(result.is_ok());
+
+        // Test email validation
+        let result = Validator::validate_email("invalid-email");
+        assert!(result.is_err());
+
+        let result = Validator::validate_email("valid@example.com");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_create_user_request_structure() {
+        let request = CreateUserRequest {
+            username: "testuser".to_string(),
+            email: Some("test@example.com".to_string()),
+            password: "password123".to_string(),
+        };
+
+        // Test that the request structure is correct
+        assert_eq!(request.username, "testuser");
+        assert_eq!(request.email, Some("test@example.com".to_string()));
+        assert_eq!(request.password, "password123");
+
+        // Test cloning works
+        let cloned = request.clone();
+        assert_eq!(cloned.username, request.username);
+        assert_eq!(cloned.email, request.email);
+        assert_eq!(cloned.password, request.password);
+    }
+
+    #[test]
+    fn test_login_validation_logic() {
+        // Test username validation for login
+        let result = Validator::validate_string("", "username", 1, 50);
+        assert!(result.is_err());
+
+        let result = Validator::validate_string("validuser", "username", 1, 50);
+        assert!(result.is_ok());
+
+        // Test password validation for login (different from create - min 1 instead of 8)
+        let result = Validator::validate_string("", "password", 1, 128);
+        assert!(result.is_err());
+
+        let result = Validator::validate_string("anypassword", "password", 1, 128);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_change_password_validation_logic() {
+        // Test UUID validation
+        let result = Validator::validate_uuid("invalid-uuid", "user_id");
+        assert!(result.is_err());
+
+        let valid_uuid = uuid::Uuid::new_v4().to_string();
+        let result = Validator::validate_uuid(&valid_uuid, "user_id");
+        assert!(result.is_ok());
+
+        // Test current password validation
+        let result = Validator::validate_string("", "current_password", 1, 128);
+        assert!(result.is_err());
+
+        let result = Validator::validate_string("current123", "current_password", 1, 128);
+        assert!(result.is_ok());
+
+        // Test new password validation
+        let result = Validator::validate_string("short", "new_password", 8, 128);
+        assert!(result.is_err());
+
+        let result = Validator::validate_string("newpassword123", "new_password", 8, 128);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_change_password_request_structure() {
+        let request = ChangePasswordRequest {
+            user_id: uuid::Uuid::new_v4().to_string(),
+            current_password: "current123".to_string(),
+            new_password: "newpassword123".to_string(),
+        };
+
+        // Test that the request structure is correct
+        assert!(!request.user_id.is_empty());
+        assert_eq!(request.current_password, "current123");
+        assert_eq!(request.new_password, "newpassword123");
+    }
+
+    #[test]
+    fn test_get_current_user_validation_logic() {
+        // Test UUID validation
+        let result = Validator::validate_uuid("invalid-uuid", "user_id");
+        assert!(result.is_err());
+
+        let valid_uuid = uuid::Uuid::new_v4().to_string();
+        let result = Validator::validate_uuid(&valid_uuid, "user_id");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_password_hashing_security() {
+        let passwords = vec![
+            "simple123",
+            "Complex!Password@2023",
+            "very_long_password_with_many_characters_123456789",
+            "短密码123", // Unicode characters
+            "password with spaces",
+        ];
+
+        for password in passwords {
+            let hash_result = hash_password(password);
+            assert!(hash_result.is_ok(), "Failed to hash password: {password}");
+
+            let hash = hash_result.unwrap();
+
+            // Verify the password can be verified
+            let verify_result = verify_password(password, &hash);
+            assert!(
+                verify_result.is_ok(),
+                "Failed to verify password: {password}"
+            );
+            assert!(
+                verify_result.unwrap(),
+                "Password verification failed for: {password}"
+            );
+
+            // Verify wrong password fails
+            let wrong_verify = verify_password("wrong_password", &hash);
+            assert!(wrong_verify.is_ok());
+            assert!(
+                !wrong_verify.unwrap(),
+                "Wrong password should not verify for: {password}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_password_hash_format() {
+        let password = "test_password_123";
+        let hash = hash_password(password).unwrap();
+
+        // Argon2 hash should have specific format
+        let parts: Vec<&str> = hash.split('$').collect();
+        assert!(
+            parts.len() >= 6,
+            "Hash should have at least 6 parts separated by $"
+        );
+        assert_eq!(parts[1], "argon2id", "Should use argon2id variant");
+        assert_eq!(parts[2], "v=19", "Should use version 19");
+
+        // Parameters should be present
+        assert!(parts[3].contains("m="), "Should contain memory parameter");
+        assert!(parts[3].contains("t="), "Should contain time parameter");
+        assert!(
+            parts[3].contains("p="),
+            "Should contain parallelism parameter"
+        );
+    }
+
+    #[test]
+    fn test_create_user_request_helper() {
+        let request =
+            TestUtils::create_user_request("testuser", Some("test@example.com"), "password123");
+
+        assert_eq!(request.username, "testuser");
+        assert_eq!(request.email, Some("test@example.com".to_string()));
+        assert_eq!(request.password, "password123");
+    }
+
+    #[test]
+    fn test_login_request_helper() {
+        let request = TestUtils::login_request("testuser", "password123");
+
+        assert_eq!(request.username, "testuser");
+        assert_eq!(request.password, "password123");
+    }
+
+    #[test]
+    fn test_edge_cases() {
+        // Test maximum length username
+        let long_username = "a".repeat(50);
+        let request = CreateUserRequest {
+            username: long_username.clone(),
+            email: None,
+            password: "password123".to_string(),
+        };
+
+        // Should not panic on validation
+        let validation_result = Validator::validate_string(&request.username, "username", 3, 50);
+        assert!(validation_result.is_ok());
+
+        // Test maximum length password
+        let long_password = "a".repeat(128);
+        let validation_result = Validator::validate_string(&long_password, "password", 8, 128);
+        assert!(validation_result.is_ok());
+
+        // Test password that's too long
+        let too_long_password = "a".repeat(129);
+        let validation_result = Validator::validate_string(&too_long_password, "password", 8, 128);
+        assert!(validation_result.is_err());
+    }
+}

@@ -264,3 +264,409 @@ impl SecurityValidator {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rust_decimal::Decimal;
+
+    #[test]
+    fn test_fiscus_error_display() {
+        let error = FiscusError::Database("Connection failed".to_string());
+        assert_eq!(error.to_string(), "Database error: Connection failed");
+
+        let error = FiscusError::Validation("Invalid input".to_string());
+        assert_eq!(error.to_string(), "Validation error: Invalid input");
+
+        let error = FiscusError::Authentication("Invalid credentials".to_string());
+        assert_eq!(
+            error.to_string(),
+            "Authentication error: Invalid credentials"
+        );
+
+        let error = FiscusError::Authorization("Access denied".to_string());
+        assert_eq!(error.to_string(), "Authorization error: Access denied");
+
+        let error = FiscusError::NotFound("User not found".to_string());
+        assert_eq!(error.to_string(), "Not found: User not found");
+
+        let error = FiscusError::Conflict("Username already exists".to_string());
+        assert_eq!(error.to_string(), "Conflict: Username already exists");
+
+        let error = FiscusError::InvalidInput("Invalid JSON".to_string());
+        assert_eq!(error.to_string(), "Invalid input: Invalid JSON");
+
+        let error = FiscusError::Security("SQL injection attempt".to_string());
+        assert_eq!(
+            error.to_string(),
+            "Security violation: SQL injection attempt"
+        );
+
+        let error = FiscusError::Internal("Server error".to_string());
+        assert_eq!(error.to_string(), "Internal server error: Server error");
+
+        let error = FiscusError::External("API error".to_string());
+        assert_eq!(error.to_string(), "External service error: API error");
+    }
+
+    #[test]
+    fn test_fiscus_error_serialization() {
+        let error = FiscusError::Database("Connection failed".to_string());
+        let serialized = serde_json::to_string(&error).unwrap();
+        let deserialized: FiscusError = serde_json::from_str(&serialized).unwrap();
+
+        match deserialized {
+            FiscusError::Database(msg) => assert_eq!(msg, "Connection failed"),
+            _ => panic!("Expected Database error"),
+        }
+    }
+
+    #[test]
+    fn test_error_conversions() {
+        // Test serde_json::Error conversion
+        let json_error = serde_json::from_str::<serde_json::Value>("invalid json");
+        assert!(json_error.is_err());
+        let fiscus_error: FiscusError = json_error.unwrap_err().into();
+        match fiscus_error {
+            FiscusError::InvalidInput(msg) => assert!(msg.contains("JSON parsing error")),
+            _ => panic!("Expected InvalidInput error"),
+        }
+
+        // Test uuid::Error conversion
+        let uuid_error = uuid::Uuid::parse_str("invalid-uuid");
+        assert!(uuid_error.is_err());
+        let fiscus_error: FiscusError = uuid_error.unwrap_err().into();
+        match fiscus_error {
+            FiscusError::InvalidInput(msg) => assert!(msg.contains("UUID error")),
+            _ => panic!("Expected InvalidInput error"),
+        }
+
+        // Test chrono::ParseError conversion
+        let date_error = chrono::DateTime::parse_from_rfc3339("invalid-date");
+        assert!(date_error.is_err());
+        let fiscus_error: FiscusError = date_error.unwrap_err().into();
+        match fiscus_error {
+            FiscusError::InvalidInput(msg) => assert!(msg.contains("Date parsing error")),
+            _ => panic!("Expected InvalidInput error"),
+        }
+
+        // Test rust_decimal::Error conversion
+        let decimal_error = Decimal::from_str_exact("invalid-decimal");
+        assert!(decimal_error.is_err());
+        let fiscus_error: FiscusError = decimal_error.unwrap_err().into();
+        match fiscus_error {
+            FiscusError::InvalidInput(msg) => assert!(msg.contains("Decimal parsing error")),
+            _ => panic!("Expected InvalidInput error"),
+        }
+    }
+
+    mod validator_tests {
+        use super::*;
+
+        #[test]
+        fn test_validate_string() {
+            // Valid strings
+            assert!(Validator::validate_string("hello", "field", 1, 10).is_ok());
+            assert!(Validator::validate_string("a", "field", 1, 10).is_ok());
+            assert!(Validator::validate_string("1234567890", "field", 1, 10).is_ok());
+
+            // Empty string when min_length > 0
+            assert!(Validator::validate_string("", "field", 1, 10).is_err());
+
+            // String too short
+            assert!(Validator::validate_string("ab", "field", 3, 10).is_err());
+
+            // String too long
+            assert!(Validator::validate_string("12345678901", "field", 1, 10).is_err());
+
+            // Empty string is never allowed due to trim() check
+            assert!(Validator::validate_string("", "field", 0, 10).is_err());
+        }
+
+        #[test]
+        fn test_validate_email() {
+            // Valid emails
+            assert!(Validator::validate_email("test@example.com").is_ok());
+            assert!(Validator::validate_email("user.name@domain.co.uk").is_ok());
+            assert!(Validator::validate_email("user+tag@example.org").is_ok());
+
+            // Invalid emails
+            assert!(Validator::validate_email("invalid-email").is_err());
+            assert!(Validator::validate_email("@example.com").is_err());
+            assert!(Validator::validate_email("test@").is_err());
+            assert!(Validator::validate_email("test@.com").is_err());
+            assert!(Validator::validate_email("").is_err());
+        }
+
+        #[test]
+        fn test_validate_uuid() {
+            // Valid UUIDs
+            let valid_uuid = "550e8400-e29b-41d4-a716-446655440000";
+            assert!(Validator::validate_uuid(valid_uuid, "id").is_ok());
+
+            let uuid_v4 = uuid::Uuid::new_v4().to_string();
+            assert!(Validator::validate_uuid(&uuid_v4, "id").is_ok());
+
+            // Invalid UUIDs
+            assert!(Validator::validate_uuid("invalid-uuid", "id").is_err());
+            assert!(Validator::validate_uuid("", "id").is_err());
+            assert!(Validator::validate_uuid("550e8400-e29b-41d4-a716", "id").is_err());
+        }
+
+        #[test]
+        fn test_validate_amount() {
+            // Valid amounts
+            assert!(Validator::validate_amount(Decimal::new(100, 2), false).is_ok()); // $1.00
+            assert!(Validator::validate_amount(Decimal::new(0, 0), false).is_ok()); // $0.00
+            assert!(Validator::validate_amount(Decimal::new(999999999, 2), false).is_ok()); // Large amount
+
+            // Negative amounts
+            assert!(Validator::validate_amount(Decimal::new(-100, 2), true).is_ok()); // Allowed
+            assert!(Validator::validate_amount(Decimal::new(-100, 2), false).is_err()); // Not allowed
+
+            // Test maximum amount validation
+            let max_amount = Decimal::new(999999999999i64, 2); // Very large amount
+            assert!(Validator::validate_amount(max_amount, false).is_ok());
+
+            let too_large = Decimal::new(i64::MAX, 0);
+            // This should be invalid as it exceeds our max limit
+            assert!(Validator::validate_amount(too_large, false).is_err());
+        }
+
+        #[test]
+        fn test_validate_date() {
+            // Valid dates
+            assert!(Validator::validate_date("2023-12-25").is_ok());
+            assert!(Validator::validate_date("2000-01-01").is_ok());
+            assert!(Validator::validate_date("2024-02-29").is_ok()); // Leap year
+
+            // Invalid dates
+            assert!(Validator::validate_date("2023-13-01").is_err()); // Invalid month
+            assert!(Validator::validate_date("2023-12-32").is_err()); // Invalid day
+            assert!(Validator::validate_date("2023/12/25").is_err()); // Wrong format
+            assert!(Validator::validate_date("invalid-date").is_err());
+            assert!(Validator::validate_date("").is_err());
+        }
+
+        #[test]
+        fn test_validate_datetime() {
+            // Valid datetimes
+            assert!(Validator::validate_datetime("2023-12-25T10:30:00Z").is_ok());
+            assert!(Validator::validate_datetime("2023-12-25T10:30:00+00:00").is_ok());
+            assert!(Validator::validate_datetime("2023-12-25T10:30:00-05:00").is_ok());
+
+            // Invalid datetimes
+            assert!(Validator::validate_datetime("2023-12-25 10:30:00").is_err()); // Wrong format
+            assert!(Validator::validate_datetime("2023-12-25T25:30:00Z").is_err()); // Invalid hour
+            assert!(Validator::validate_datetime("invalid-datetime").is_err());
+            assert!(Validator::validate_datetime("").is_err());
+        }
+    }
+
+    mod security_validator_tests {
+        use super::*;
+        use std::collections::HashMap;
+
+        #[test]
+        fn test_validate_sort_field() {
+            // Valid account sort fields
+            assert!(SecurityValidator::validate_sort_field(
+                "name",
+                SecurityValidator::ACCOUNT_SORT_FIELDS
+            )
+            .is_ok());
+            assert!(SecurityValidator::validate_sort_field(
+                "balance",
+                SecurityValidator::ACCOUNT_SORT_FIELDS
+            )
+            .is_ok());
+            assert!(SecurityValidator::validate_sort_field(
+                "created_at",
+                SecurityValidator::ACCOUNT_SORT_FIELDS
+            )
+            .is_ok());
+
+            // Invalid account sort fields
+            assert!(SecurityValidator::validate_sort_field(
+                "password",
+                SecurityValidator::ACCOUNT_SORT_FIELDS
+            )
+            .is_err());
+            assert!(SecurityValidator::validate_sort_field(
+                "DROP TABLE",
+                SecurityValidator::ACCOUNT_SORT_FIELDS
+            )
+            .is_err());
+            assert!(SecurityValidator::validate_sort_field(
+                "",
+                SecurityValidator::ACCOUNT_SORT_FIELDS
+            )
+            .is_err());
+
+            // Valid transaction sort fields
+            assert!(SecurityValidator::validate_sort_field(
+                "amount",
+                SecurityValidator::TRANSACTION_SORT_FIELDS
+            )
+            .is_ok());
+            assert!(SecurityValidator::validate_sort_field(
+                "description",
+                SecurityValidator::TRANSACTION_SORT_FIELDS
+            )
+            .is_ok());
+
+            // Test that field names are quoted in response
+            let result = SecurityValidator::validate_sort_field(
+                "name",
+                SecurityValidator::ACCOUNT_SORT_FIELDS,
+            )
+            .unwrap();
+            assert_eq!(result, "`name`");
+        }
+
+        #[test]
+        fn test_validate_sort_direction() {
+            // Valid directions
+            assert!(SecurityValidator::validate_sort_direction("ASC").is_ok());
+            assert!(SecurityValidator::validate_sort_direction("DESC").is_ok());
+            assert!(SecurityValidator::validate_sort_direction("asc").is_ok());
+            assert!(SecurityValidator::validate_sort_direction("desc").is_ok());
+
+            // Test case normalization
+            assert_eq!(
+                SecurityValidator::validate_sort_direction("asc").unwrap(),
+                "ASC"
+            );
+            assert_eq!(
+                SecurityValidator::validate_sort_direction("desc").unwrap(),
+                "DESC"
+            );
+
+            // Invalid directions
+            assert!(SecurityValidator::validate_sort_direction("INVALID").is_err());
+            assert!(SecurityValidator::validate_sort_direction("ORDER BY").is_err());
+            assert!(SecurityValidator::validate_sort_direction("").is_err());
+            assert!(SecurityValidator::validate_sort_direction("ASC; DROP TABLE").is_err());
+        }
+
+        #[test]
+        fn test_validate_account_filter_fields() {
+            // Valid filters
+            let mut valid_filters = HashMap::new();
+            valid_filters.insert("user_id".to_string(), "test-user-id".to_string());
+            valid_filters.insert("type".to_string(), "checking".to_string());
+            valid_filters.insert("is_active".to_string(), "true".to_string());
+            assert!(SecurityValidator::validate_account_filter_fields(&valid_filters).is_ok());
+
+            // Invalid filters
+            let mut invalid_filters = HashMap::new();
+            invalid_filters.insert("password".to_string(), "secret".to_string());
+            assert!(SecurityValidator::validate_account_filter_fields(&invalid_filters).is_err());
+
+            let mut sql_injection_filters = HashMap::new();
+            sql_injection_filters
+                .insert("user_id; DROP TABLE users".to_string(), "value".to_string());
+            assert!(
+                SecurityValidator::validate_account_filter_fields(&sql_injection_filters).is_err()
+            );
+        }
+
+        #[test]
+        fn test_validate_transaction_filter_fields() {
+            // Valid filters
+            let mut valid_filters = HashMap::new();
+            valid_filters.insert("user_id".to_string(), "test-user-id".to_string());
+            valid_filters.insert("account_id".to_string(), "test-account-id".to_string());
+            valid_filters.insert("category_id".to_string(), "test-category-id".to_string());
+            valid_filters.insert("transaction_type".to_string(), "expense".to_string());
+            valid_filters.insert("status".to_string(), "completed".to_string());
+            valid_filters.insert("start_date".to_string(), "2023-01-01".to_string());
+            valid_filters.insert("end_date".to_string(), "2023-12-31".to_string());
+            valid_filters.insert("min_amount".to_string(), "0".to_string());
+            valid_filters.insert("max_amount".to_string(), "1000".to_string());
+            assert!(SecurityValidator::validate_transaction_filter_fields(&valid_filters).is_ok());
+
+            // Invalid filters
+            let mut invalid_filters = HashMap::new();
+            invalid_filters.insert("password".to_string(), "secret".to_string());
+            assert!(
+                SecurityValidator::validate_transaction_filter_fields(&invalid_filters).is_err()
+            );
+
+            let mut sql_injection_filters = HashMap::new();
+            sql_injection_filters.insert(
+                "user_id; DROP TABLE transactions".to_string(),
+                "value".to_string(),
+            );
+            assert!(
+                SecurityValidator::validate_transaction_filter_fields(&sql_injection_filters)
+                    .is_err()
+            );
+        }
+
+        #[test]
+        fn test_sort_field_constants() {
+            // Test that all expected fields are present
+            assert!(SecurityValidator::ACCOUNT_SORT_FIELDS.contains(&"name"));
+            assert!(SecurityValidator::ACCOUNT_SORT_FIELDS.contains(&"type"));
+            assert!(SecurityValidator::ACCOUNT_SORT_FIELDS.contains(&"balance"));
+            assert!(SecurityValidator::ACCOUNT_SORT_FIELDS.contains(&"created_at"));
+            assert!(SecurityValidator::ACCOUNT_SORT_FIELDS.contains(&"updated_at"));
+
+            assert!(SecurityValidator::TRANSACTION_SORT_FIELDS.contains(&"amount"));
+            assert!(SecurityValidator::TRANSACTION_SORT_FIELDS.contains(&"description"));
+            assert!(SecurityValidator::TRANSACTION_SORT_FIELDS.contains(&"transaction_date"));
+            assert!(SecurityValidator::TRANSACTION_SORT_FIELDS.contains(&"created_at"));
+            assert!(SecurityValidator::TRANSACTION_SORT_FIELDS.contains(&"updated_at"));
+
+            assert!(SecurityValidator::CATEGORY_SORT_FIELDS.contains(&"name"));
+            assert!(SecurityValidator::CATEGORY_SORT_FIELDS.contains(&"created_at"));
+            assert!(SecurityValidator::CATEGORY_SORT_FIELDS.contains(&"updated_at"));
+
+            assert!(SecurityValidator::BUDGET_SORT_FIELDS.contains(&"allocated_amount"));
+            assert!(SecurityValidator::BUDGET_SORT_FIELDS.contains(&"spent_amount"));
+            assert!(SecurityValidator::BUDGET_SORT_FIELDS.contains(&"created_at"));
+            assert!(SecurityValidator::BUDGET_SORT_FIELDS.contains(&"updated_at"));
+        }
+
+        #[test]
+        fn test_sql_injection_prevention() {
+            // Test that malicious field names are rejected
+            let malicious_fields = vec![
+                "name; DROP TABLE users",
+                "name' OR '1'='1",
+                "name UNION SELECT password FROM users",
+                "name/*comment*/",
+                "name--comment",
+                "name\x00",
+            ];
+
+            for field in malicious_fields {
+                assert!(
+                    SecurityValidator::validate_sort_field(
+                        field,
+                        SecurityValidator::ACCOUNT_SORT_FIELDS
+                    )
+                    .is_err(),
+                    "Should reject malicious field: {field}"
+                );
+            }
+
+            // Test that malicious sort directions are rejected
+            let malicious_directions = vec![
+                "ASC; DROP TABLE users",
+                "ASC' OR '1'='1",
+                "ASC UNION SELECT password FROM users",
+                "ASC/*comment*/",
+                "ASC--comment",
+            ];
+
+            for direction in malicious_directions {
+                assert!(
+                    SecurityValidator::validate_sort_direction(direction).is_err(),
+                    "Should reject malicious direction: {direction}"
+                );
+            }
+        }
+    }
+}

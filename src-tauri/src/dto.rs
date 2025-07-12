@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
+use crate::encryption::types::{EncryptionAlgorithm, KeyDerivationAlgorithm, KeyType};
 use crate::models::{GoalStatus, TransactionStatus, TransactionType};
 
 /// Request DTOs for creating entities
@@ -283,6 +284,114 @@ impl<T> PaginatedResponse<T> {
             total_pages,
         }
     }
+}
+
+/// Encryption-related DTOs
+
+#[derive(Debug, Deserialize)]
+pub struct EncryptDataRequest {
+    pub user_id: String,
+    pub data_type: String,
+    pub data: String, // Base64 encoded data
+}
+
+#[derive(Debug, Serialize)]
+pub struct EncryptDataResponse {
+    pub encrypted_data: String, // Base64 encoded
+    pub nonce: String,          // Base64 encoded
+    pub algorithm: EncryptionAlgorithm,
+    pub key_id: String,
+    pub encrypted_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DecryptDataRequest {
+    pub user_id: String,
+    pub data_type: String,
+    pub encrypted_data: String, // Base64 encoded
+    pub nonce: String,          // Base64 encoded
+    pub algorithm: EncryptionAlgorithm,
+    pub key_id: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DecryptDataResponse {
+    pub data: String, // Base64 encoded decrypted data
+    pub decrypted_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GenerateKeyRequest {
+    pub user_id: String,
+    pub algorithm: EncryptionAlgorithm,
+}
+
+#[derive(Debug, Serialize)]
+pub struct GenerateKeyResponse {
+    pub key_id: String,
+    pub algorithm: EncryptionAlgorithm,
+    pub key_type: KeyType,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RotateKeysRequest {
+    pub user_id: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct EncryptionStatsResponse {
+    pub total_keys: usize,
+    pub active_keys: usize,
+    pub rotated_keys: usize,
+    pub encryption_operations: u64,
+    pub decryption_operations: u64,
+    pub key_derivation_operations: u64,
+    pub last_key_rotation: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DeriveKeyRequest {
+    pub password: String,
+    pub algorithm: KeyDerivationAlgorithm,
+    pub salt: Option<String>, // Base64 encoded salt
+}
+
+#[derive(Debug, Serialize)]
+pub struct DeriveKeyResponse {
+    pub key_id: String,
+    pub algorithm: KeyDerivationAlgorithm,
+    pub derived_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SignDataRequest {
+    pub user_id: String,
+    pub data: String, // Base64 encoded data to sign
+    pub private_key_id: String,
+    pub algorithm: EncryptionAlgorithm,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SignDataResponse {
+    pub signature: String, // Base64 encoded signature
+    pub algorithm: EncryptionAlgorithm,
+    pub signed_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct VerifySignatureRequest {
+    pub data: String,       // Base64 encoded original data
+    pub signature: String,  // Base64 encoded signature
+    pub public_key: String, // Base64 encoded public key
+    pub algorithm: EncryptionAlgorithm,
+}
+
+#[derive(Debug, Serialize)]
+pub struct VerifySignatureResponse {
+    pub is_valid: bool,
+    pub algorithm: EncryptionAlgorithm,
+    pub verified_at: DateTime<Utc>,
 }
 
 impl From<crate::models::User> for UserResponse {

@@ -4,9 +4,11 @@ use tauri_plugin_sql::{Migration, MigrationKind};
 mod commands;
 mod database;
 mod dto;
-mod error;
+pub mod encryption;
+pub mod error;
 mod logging;
 mod models;
+pub mod security;
 
 #[cfg(test)]
 mod test_utils;
@@ -30,6 +32,14 @@ pub fn run() {
     }
 
     tracing::info!("Starting Fiscus application");
+
+    // Initialize encryption service
+    if let Err(e) = commands::encryption::initialize_encryption_service() {
+        tracing::error!("Failed to initialize encryption service: {e}");
+        // Continue without encryption rather than crash
+    } else {
+        tracing::info!("Encryption service initialized successfully");
+    }
 
     // Define database migrations for the personal finance application
     let migrations = vec![Migration {
@@ -105,6 +115,13 @@ pub fn run() {
             commands::get_account_balance_history,
             commands::get_budget_performance,
             commands::get_net_worth_progression,
+            // Encryption commands
+            commands::encrypt_financial_data,
+            commands::decrypt_financial_data,
+            commands::generate_encryption_key,
+            commands::rotate_user_keys,
+            commands::get_encryption_stats,
+            commands::derive_key_from_password,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

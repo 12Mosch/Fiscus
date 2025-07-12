@@ -40,6 +40,20 @@ tracing-subscriber = { version = "0.3.19", features = [
 ] }
 tracing-appender = "0.2.3"
 rand = "0.8"
+# Encryption dependencies
+aes-gcm = "0.10"
+rsa = { version = "0.9", features = ["sha2"] }
+ed25519-dalek = { version = "2.0", features = ["rand_core"] }
+pbkdf2 = { version = "0.12", features = ["simple"] }
+scrypt = "0.11"
+zeroize = { version = "1.7", features = ["zeroize_derive"] }
+chacha20poly1305 = "0.10"
+x25519-dalek = { version = "2.0", features = ["static_secrets"] }
+hkdf = "0.12"
+sha2 = "0.10"
+base64 = "0.22"
+async-trait = "0.1"
+hex = "0.4"
 
 [dev-dependencies]
 mockall = "0.12"

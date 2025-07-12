@@ -1,3 +1,4 @@
+use aes_gcm::aead;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::error;
@@ -36,6 +37,18 @@ pub enum FiscusError {
 
     #[error("External service error: {0}")]
     External(String),
+
+    #[error("Encryption error: {0}")]
+    Encryption(String),
+
+    #[error("Key derivation error: {0}")]
+    KeyDerivation(String),
+
+    #[error("Key management error: {0}")]
+    KeyManagement(String),
+
+    #[error("Cryptographic operation failed: {0}")]
+    Cryptographic(String),
 }
 
 impl FiscusError {
@@ -59,6 +72,17 @@ impl FiscusError {
                     error = %error_msg,
                     context = context,
                     "Security violation detected"
+                );
+            }
+            FiscusError::Encryption(_)
+            | FiscusError::KeyDerivation(_)
+            | FiscusError::KeyManagement(_)
+            | FiscusError::Cryptographic(_) => {
+                error!(
+                    error_type = error_type,
+                    error = %error_msg,
+                    context = context,
+                    "Cryptographic operation error"
                 );
             }
             FiscusError::Authentication(_) | FiscusError::Authorization(_) => {
@@ -101,6 +125,10 @@ impl FiscusError {
             FiscusError::Security(_) => "security",
             FiscusError::Internal(_) => "internal",
             FiscusError::External(_) => "external",
+            FiscusError::Encryption(_) => "encryption",
+            FiscusError::KeyDerivation(_) => "key_derivation",
+            FiscusError::KeyManagement(_) => "key_management",
+            FiscusError::Cryptographic(_) => "cryptographic",
         }
     }
 
@@ -108,7 +136,12 @@ impl FiscusError {
     pub fn is_critical(&self) -> bool {
         matches!(
             self,
-            FiscusError::Database(_) | FiscusError::Security(_) | FiscusError::Internal(_)
+            FiscusError::Database(_)
+                | FiscusError::Security(_)
+                | FiscusError::Internal(_)
+                | FiscusError::Encryption(_)
+                | FiscusError::KeyManagement(_)
+                | FiscusError::Cryptographic(_)
         )
     }
 
@@ -158,6 +191,44 @@ impl From<argon2::password_hash::Error> for FiscusError {
 impl From<anyhow::Error> for FiscusError {
     fn from(err: anyhow::Error) -> Self {
         FiscusError::Internal(err.to_string())
+    }
+}
+
+// Note: aes_gcm::Error and chacha20poly1305::Error are the same type (aead::Error)
+// so we can only implement From for one of them. We'll use a generic approach.
+impl From<aead::Error> for FiscusError {
+    fn from(err: aead::Error) -> Self {
+        FiscusError::Encryption(format!("AEAD encryption error: {err}"))
+    }
+}
+
+impl From<rsa::Error> for FiscusError {
+    fn from(err: rsa::Error) -> Self {
+        FiscusError::Encryption(format!("RSA error: {err}"))
+    }
+}
+
+impl From<ed25519_dalek::SignatureError> for FiscusError {
+    fn from(err: ed25519_dalek::SignatureError) -> Self {
+        FiscusError::Encryption(format!("Ed25519 error: {err}"))
+    }
+}
+
+impl From<scrypt::errors::InvalidParams> for FiscusError {
+    fn from(err: scrypt::errors::InvalidParams) -> Self {
+        FiscusError::KeyDerivation(format!("Scrypt parameter error: {err}"))
+    }
+}
+
+impl From<scrypt::errors::InvalidOutputLen> for FiscusError {
+    fn from(err: scrypt::errors::InvalidOutputLen) -> Self {
+        FiscusError::KeyDerivation(format!("Scrypt output length error: {err}"))
+    }
+}
+
+impl From<base64::DecodeError> for FiscusError {
+    fn from(err: base64::DecodeError) -> Self {
+        FiscusError::InvalidInput(format!("Base64 decode error: {err}"))
     }
 }
 
@@ -300,6 +371,19 @@ impl SecurityValidator {
                 "Invalid sort direction. Must be ASC or DESC".to_string(),
             )),
         }
+    }
+
+    /// Validate data size limits
+    pub fn validate_data_size(data: &[u8], max_size: usize, field_name: &str) -> FiscusResult<()> {
+        if data.len() > max_size {
+            return Err(FiscusError::Security(format!(
+                "{} size exceeds maximum limit: {} > {}",
+                field_name,
+                data.len(),
+                max_size
+            )));
+        }
+        Ok(())
     }
 
     /// Validate filter fields for accounts

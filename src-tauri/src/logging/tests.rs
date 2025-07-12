@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod tests {
+mod logging_tests {
 
     use crate::error::FiscusError;
     use crate::logging::{
@@ -123,15 +123,11 @@ mod tests {
             let sanitized = sanitizer.sanitize_string(input);
             assert!(
                 sanitized.contains(expected_pattern),
-                "Expected '{}' to contain '{}', got '{}'",
-                input,
-                expected_pattern,
-                sanitized
+                "Expected '{input}' to contain '{expected_pattern}', got '{sanitized}'"
             );
             assert!(
                 !sanitized.contains(input),
-                "Original sensitive data should be removed: '{}'",
-                sanitized
+                "Original sensitive data should be removed: '{sanitized}'"
             );
         }
     }

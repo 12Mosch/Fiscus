@@ -570,7 +570,7 @@ export const authService = new AuthService();
 
 ### 3.4 Implementation Tasks
 
-- [ ] Implement encryption service in Rust
+- [x] Implement encryption service in Rust
 - [ ] Create secure storage wrapper
 - [x] Implement password hashing and verification
 - [x] Create authentication service

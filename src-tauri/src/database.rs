@@ -6,6 +6,9 @@ use tracing::{debug, error, info, warn};
 use crate::error::{FiscusError, FiscusResult, SecurityValidator};
 use crate::logging::DatabaseLogger;
 
+// Sub-modules
+pub mod encrypted;
+
 /// Database connection type alias
 pub type Database = String;
 

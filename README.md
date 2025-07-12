@@ -7,8 +7,8 @@ A modern desktop application built with Tauri 2.0 and React, providing a secure 
 - **Frontend**: React 18+ with TypeScript
 - **Routing**: TanStack Router
 - **State Management**:
-   - **Backend**: TanStack Router loader-function
-   - **UI / Global**: Zustand
+  - **Backend**: TanStack Router loader-function
+  - **UI / Global**: Zustand
 - **Build Tool**: Vite with HMR support
 - **Backend**: Rust with Tauri 2.0
 - **Database**: SQLite with Tauri SQL plugin
@@ -38,6 +38,7 @@ A modern desktop application built with Tauri 2.0 and React, providing a secure 
 
 1. Clone the repository
 2. Install dependencies:
+
    ```bash
    npm install
    ```
@@ -79,7 +80,21 @@ docs/                   # Documentation
 
 ## Documentation
 
+### API Documentation
+
+- [API Reference](docs/api-reference.md) - Complete API documentation with examples
+- [API Testing Guide](docs/api-testing-guide.md) - Testing strategies for Rust commands and TypeScript client
+- [API Security Guide](docs/api-security-guide.md) - Security best practices and implementation
+
+### Development Guides
+
 - [React Integration Guide](docs/react-integration.md) - Detailed setup and usage guide
+- [Database Integration](docs/database-integration.md) - Database setup, schema, and usage patterns
+- [Dashboard UI Guide](docs/dashboard-ui-guide.md) - UI component documentation
+- [Development Tools](docs/development-tools.md) - Development workflow and tools
+
+### External Resources
+
 - [Tauri Documentation](https://v2.tauri.app/) - Official Tauri docs
 
 ## Recommended IDE Setup

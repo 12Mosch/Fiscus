@@ -1,7 +1,10 @@
 use serde_json::Value;
 use std::collections::HashMap;
+use std::time::Instant;
+use tracing::{debug, error, info, warn};
 
 use crate::error::{FiscusError, FiscusResult, SecurityValidator};
+use crate::logging::DatabaseLogger;
 
 /// Database connection type alias
 pub type Database = String;
@@ -13,40 +16,142 @@ impl DatabaseUtils {
     /// Execute a query with parameters and return results
     pub async fn execute_query<T>(
         _db: &Database,
-        _query: &str,
-        _params: Vec<Value>,
+        query: &str,
+        params: Vec<Value>,
     ) -> FiscusResult<Vec<T>>
     where
         T: serde::de::DeserializeOwned,
     {
+        let start_time = Instant::now();
+        let db_logger = DatabaseLogger::new();
+
+        debug!(
+            query = query,
+            param_count = params.len(),
+            "Executing database query"
+        );
+
         // TODO: Implement proper database query execution
         // This is a placeholder to allow compilation
-        Ok(Vec::new())
+        let result: FiscusResult<Vec<T>> = Ok(Vec::new());
+
+        let duration = start_time.elapsed();
+
+        match &result {
+            Ok(rows) => {
+                db_logger.log_query(query, &params, duration);
+                info!(
+                    query = query,
+                    duration_ms = duration.as_millis(),
+                    row_count = rows.len(),
+                    "Query executed successfully"
+                );
+            }
+            Err(error) => {
+                db_logger.log_query_error(query, &params, &error.to_string());
+                error!(
+                    query = query,
+                    duration_ms = duration.as_millis(),
+                    error = %error,
+                    "Query execution failed"
+                );
+            }
+        }
+
+        result
     }
 
     /// Execute a single query and return the first result
     pub async fn execute_query_single<T>(
         _db: &Database,
-        _query: &str,
-        _params: Vec<Value>,
+        query: &str,
+        params: Vec<Value>,
     ) -> FiscusResult<Option<T>>
     where
         T: serde::de::DeserializeOwned,
     {
+        let start_time = Instant::now();
+        let db_logger = DatabaseLogger::new();
+
+        debug!(
+            query = query,
+            param_count = params.len(),
+            "Executing single database query"
+        );
+
         // TODO: Implement proper database query execution
         // This is a placeholder to allow compilation
-        Ok(None)
+        let result: FiscusResult<Option<T>> = Ok(None);
+
+        let duration = start_time.elapsed();
+
+        match &result {
+            Ok(row) => {
+                db_logger.log_query(query, &params, duration);
+                info!(
+                    query = query,
+                    duration_ms = duration.as_millis(),
+                    found = row.is_some(),
+                    "Single query executed successfully"
+                );
+            }
+            Err(error) => {
+                db_logger.log_query_error(query, &params, &error.to_string());
+                error!(
+                    query = query,
+                    duration_ms = duration.as_millis(),
+                    error = %error,
+                    "Single query execution failed"
+                );
+            }
+        }
+
+        result
     }
 
     /// Execute an insert/update/delete query and return affected rows
     pub async fn execute_non_query(
         _db: &Database,
-        _query: &str,
-        _params: Vec<Value>,
+        query: &str,
+        params: Vec<Value>,
     ) -> FiscusResult<u64> {
+        let start_time = Instant::now();
+        let db_logger = DatabaseLogger::new();
+
+        debug!(
+            query = query,
+            param_count = params.len(),
+            "Executing non-query database operation"
+        );
+
         // TODO: Implement proper database query execution
         // This is a placeholder to allow compilation
-        Ok(0)
+        let result: FiscusResult<u64> = Ok(0);
+
+        let duration = start_time.elapsed();
+
+        match &result {
+            Ok(affected_rows) => {
+                db_logger.log_query(query, &params, duration);
+                info!(
+                    query = query,
+                    duration_ms = duration.as_millis(),
+                    affected_rows = affected_rows,
+                    "Non-query executed successfully"
+                );
+            }
+            Err(error) => {
+                db_logger.log_query_error(query, &params, &error.to_string());
+                error!(
+                    query = query,
+                    duration_ms = duration.as_millis(),
+                    error = %error,
+                    "Non-query execution failed"
+                );
+            }
+        }
+
+        result
     }
 
     /// Build a WHERE clause from filters with proper validation
@@ -205,6 +310,11 @@ impl DatabaseUtils {
 
     /// Begin a database transaction
     pub async fn begin_transaction(_db: &Database) -> FiscusResult<()> {
+        let db_logger = DatabaseLogger::new();
+        db_logger.log_transaction_start();
+
+        info!("Database transaction started");
+
         // TODO: Implement proper transaction handling
         // This is a placeholder to allow compilation
         Ok(())
@@ -212,16 +322,57 @@ impl DatabaseUtils {
 
     /// Commit a database transaction
     pub async fn commit_transaction(_db: &Database) -> FiscusResult<()> {
+        let start_time = Instant::now();
+        let db_logger = DatabaseLogger::new();
+
         // TODO: Implement proper transaction handling
         // This is a placeholder to allow compilation
-        Ok(())
+        let result = Ok(());
+
+        let duration = start_time.elapsed();
+
+        match &result {
+            Ok(_) => {
+                db_logger.log_transaction_commit(duration);
+                info!(
+                    duration_ms = duration.as_millis(),
+                    "Database transaction committed successfully"
+                );
+            }
+            Err(error) => {
+                error!(
+                    duration_ms = duration.as_millis(),
+                    error = %error,
+                    "Database transaction commit failed"
+                );
+            }
+        }
+
+        result
     }
 
     /// Rollback a database transaction
     pub async fn rollback_transaction(_db: &Database) -> FiscusResult<()> {
+        let db_logger = DatabaseLogger::new();
+
         // TODO: Implement proper transaction handling
         // This is a placeholder to allow compilation
-        Ok(())
+        let result = Ok(());
+
+        match &result {
+            Ok(_) => {
+                db_logger.log_transaction_rollback("Manual rollback");
+                warn!("Database transaction rolled back");
+            }
+            Err(error) => {
+                error!(
+                    error = %error,
+                    "Database transaction rollback failed"
+                );
+            }
+        }
+
+        result
     }
 }
 
@@ -230,15 +381,42 @@ impl DatabaseUtils {
 macro_rules! with_transaction {
     ($db:expr, $operation:expr) => {{
         use $crate::database::DatabaseUtils;
+        use tracing::{error, info, warn};
+        use std::time::Instant;
+
+        let transaction_start = Instant::now();
+        info!("Starting database transaction");
 
         DatabaseUtils::begin_transaction($db).await?;
 
         match $operation.await {
             Ok(result) => {
-                DatabaseUtils::commit_transaction($db).await?;
-                Ok(result)
+                match DatabaseUtils::commit_transaction($db).await {
+                    Ok(_) => {
+                        let duration = transaction_start.elapsed();
+                        info!(
+                            duration_ms = duration.as_millis(),
+                            "Transaction completed successfully"
+                        );
+                        Ok(result)
+                    }
+                    Err(commit_error) => {
+                        error!(
+                            error = %commit_error,
+                            "Transaction commit failed"
+                        );
+                        let _ = DatabaseUtils::rollback_transaction($db).await;
+                        Err(commit_error)
+                    }
+                }
             }
             Err(e) => {
+                let duration = transaction_start.elapsed();
+                warn!(
+                    duration_ms = duration.as_millis(),
+                    error = %e,
+                    "Transaction failed, rolling back"
+                );
                 let _ = DatabaseUtils::rollback_transaction($db).await;
                 Err(e)
             }

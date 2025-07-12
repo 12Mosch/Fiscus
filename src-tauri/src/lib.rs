@@ -5,6 +5,7 @@ mod commands;
 mod database;
 mod dto;
 mod error;
+mod logging;
 mod models;
 
 #[cfg(test)]
@@ -17,10 +18,19 @@ mod test_database;
 pub use database::*;
 pub use dto::*;
 pub use error::*;
+pub use logging::*;
 pub use models::*;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Initialize logging system first
+    if let Err(e) = logging::init() {
+        eprintln!("Failed to initialize logging: {e}");
+        // Continue without logging rather than crash
+    }
+
+    tracing::info!("Starting Fiscus application");
+
     // Define database migrations for the personal finance application
     let migrations = vec![Migration {
         version: 1,
@@ -28,6 +38,11 @@ pub fn run() {
         sql: include_str!("../migrations/001_initial_schema.sql"),
         kind: MigrationKind::Up,
     }];
+
+    tracing::info!(
+        "Configuring Tauri application with {} migrations",
+        migrations.len()
+    );
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())

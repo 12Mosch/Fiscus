@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tracing::error;
 
 /// Custom error types for the Fiscus application
 /// These errors can be serialized across the Tauri bridge
@@ -35,6 +36,87 @@ pub enum FiscusError {
 
     #[error("External service error: {0}")]
     External(String),
+}
+
+impl FiscusError {
+    /// Log the error with appropriate level and context
+    pub fn log_error(&self, context: Option<&str>) {
+        let error_msg = self.to_string();
+        let error_type = self.error_type();
+
+        match self {
+            FiscusError::Database(_) => {
+                error!(
+                    error_type = error_type,
+                    error = %error_msg,
+                    context = context,
+                    "Database error occurred"
+                );
+            }
+            FiscusError::Security(_) => {
+                error!(
+                    error_type = error_type,
+                    error = %error_msg,
+                    context = context,
+                    "Security violation detected"
+                );
+            }
+            FiscusError::Authentication(_) | FiscusError::Authorization(_) => {
+                error!(
+                    error_type = error_type,
+                    error = %error_msg,
+                    context = context,
+                    "Authentication/Authorization error"
+                );
+            }
+            FiscusError::Internal(_) => {
+                error!(
+                    error_type = error_type,
+                    error = %error_msg,
+                    context = context,
+                    "Internal server error"
+                );
+            }
+            _ => {
+                error!(
+                    error_type = error_type,
+                    error = %error_msg,
+                    context = context,
+                    "Application error occurred"
+                );
+            }
+        }
+    }
+
+    /// Get the error type as a string for logging
+    pub fn error_type(&self) -> &'static str {
+        match self {
+            FiscusError::Database(_) => "database",
+            FiscusError::Validation(_) => "validation",
+            FiscusError::Authentication(_) => "authentication",
+            FiscusError::Authorization(_) => "authorization",
+            FiscusError::NotFound(_) => "not_found",
+            FiscusError::Conflict(_) => "conflict",
+            FiscusError::InvalidInput(_) => "invalid_input",
+            FiscusError::Security(_) => "security",
+            FiscusError::Internal(_) => "internal",
+            FiscusError::External(_) => "external",
+        }
+    }
+
+    /// Check if the error is critical (requires immediate attention)
+    pub fn is_critical(&self) -> bool {
+        matches!(
+            self,
+            FiscusError::Database(_) | FiscusError::Security(_) | FiscusError::Internal(_)
+        )
+    }
+
+    /// Create a new error with logging
+    pub fn new_with_log(error: FiscusError, context: Option<&str>) -> Self {
+        error.log_error(context);
+        error
+    }
 }
 
 impl From<tauri_plugin_sql::Error> for FiscusError {

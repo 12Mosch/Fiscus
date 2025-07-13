@@ -196,8 +196,12 @@ export class SecureStorageLegacyAdapter {
 	private extractDataTypeFromKey(key: string): string {
 		const parts = key.split("_");
 		if (parts.length >= 3 && parts[0] === "secure") {
-			// Remove 'secure' prefix and userId suffix to get dataType
-			return parts.slice(1, -1).join("_");
+			// Extract everything between 'secure_' prefix and last underscore (userId)
+			const withoutPrefix = key.substring("secure_".length);
+			const lastUnderscoreIndex = withoutPrefix.lastIndexOf("_");
+			if (lastUnderscoreIndex > 0) {
+				return withoutPrefix.substring(0, lastUnderscoreIndex);
+			}
 		}
 		// Fallback to using the key as-is
 		return key;

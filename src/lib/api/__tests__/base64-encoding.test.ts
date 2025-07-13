@@ -1,40 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-// Import just the functions we need to test
-/**
- * Encode string data to base64 for transmission using modern TextEncoder
- */
-function encodeToBase64(data: string): string {
-	// Use TextEncoder for proper UTF-8 encoding
-	const encoder = new TextEncoder();
-	const bytes = encoder.encode(data);
-
-	// Convert Uint8Array to string for btoa
-	let binaryString = "";
-	for (let i = 0; i < bytes.length; i++) {
-		binaryString += String.fromCharCode(bytes[i]);
-	}
-
-	return btoa(binaryString);
-}
-
-/**
- * Decode base64 data to string using modern TextDecoder
- */
-function decodeFromBase64(base64Data: string): string {
-	// Decode base64 to binary string
-	const binaryString = atob(base64Data);
-
-	// Convert binary string to Uint8Array
-	const bytes = new Uint8Array(binaryString.length);
-	for (let i = 0; i < binaryString.length; i++) {
-		bytes[i] = binaryString.charCodeAt(i);
-	}
-
-	// Use TextDecoder for proper UTF-8 decoding
-	const decoder = new TextDecoder();
-	return decoder.decode(bytes);
-}
+import { decodeFromBase64, encodeToBase64 } from "../encryption";
 
 describe("Base64 Encoding/Decoding", () => {
 	it("should encode and decode simple ASCII strings correctly", () => {

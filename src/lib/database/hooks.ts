@@ -9,7 +9,6 @@ import { useCallback, useEffect, useState } from "react";
 import { FiscusApiError } from "@/api/client";
 import type {
 	Account,
-	AccountFilters,
 	CreateAccountRequest,
 	CreateTransactionRequest,
 	Transaction,
@@ -117,11 +116,7 @@ export function useApiStatus() {
 }
 
 // Hook for fetching accounts
-export function useAccounts(
-	userId: string,
-	_filters?: Omit<AccountFilters, "user_id">,
-	options?: QueryOptions,
-) {
+export function useAccounts(userId: string, options?: QueryOptions) {
 	const { data, loading, error, execute, reset } =
 		useAsyncOperation<Account[]>();
 

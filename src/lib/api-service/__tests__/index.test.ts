@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 
 // We need to access the private function for testing
 // This is a bit of a hack, but it's the cleanest way to test the helper function

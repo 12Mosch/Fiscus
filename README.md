@@ -63,9 +63,42 @@ npm run lint
 npm run tauri build
 ```
 
+## 🔒 Security Architecture
+
+Fiscus implements a secure architecture with multiple layers of protection:
+
+### Data Security
+
+- **Encryption**: All sensitive financial data is encrypted using AES-256-GCM
+- **Key Management**: Secure key derivation and rotation using PBKDF2/Argon2
+- **Storage**: No plaintext financial data stored locally
+
+### API Security
+
+- **Secure Commands**: All database operations go through encrypted Tauri commands
+- **Authentication**: User authentication and session management
+- **Authorization**: Ownership verification for all data access
+- **Input Validation**: Comprehensive validation and SQL injection protection
+
+### Development Guidelines
+
+⚠️ **Critical**: Never use direct database access in frontend code. Always use the secure API service:
+
+```typescript
+// ✅ Correct - Use secure API service
+import { apiService } from '@/lib/api-service';
+const accounts = await apiService.accounts.findByUserId(userId);
+
+// ❌ Wrong - Direct database access (deprecated and removed)
+// The old database service has been removed for security reasons.
+// Use the secure API service instead:
+```
+
+For migration guidance, see [Security Migration Guide](docs/security-migration-guide.md).
+
 ## Project Structure
 
-```
+```text
 src/
 ├── components/          # React components
 ├── assets/             # Static assets

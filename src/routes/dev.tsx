@@ -6,7 +6,6 @@
 
 import { createFileRoute } from "@tanstack/react-router";
 import { Code, Database, Settings, TestTube } from "lucide-react";
-import { DatabaseSeeder } from "@/components/debug/DatabaseSeeder";
 import { Badge } from "@/components/ui/badge";
 import {
 	Card,
@@ -66,7 +65,22 @@ function DevelopmentPage() {
 						<h2 className="text-2xl font-semibold">Database Tools</h2>
 					</div>
 
-					<DatabaseSeeder />
+					<Card>
+						<CardHeader>
+							<CardTitle>Database Seeding</CardTitle>
+							<CardDescription>
+								Database seeding functionality has been removed as part of the
+								security migration. All database operations now go through the
+								secure Tauri API layer.
+							</CardDescription>
+						</CardHeader>
+						<CardContent>
+							<p className="text-sm text-muted-foreground">
+								For development data, use the secure API service to create test
+								data programmatically.
+							</p>
+						</CardContent>
+					</Card>
 				</div>
 
 				<Separator />
@@ -149,32 +163,36 @@ function DevelopmentPage() {
 						<CardContent className="pt-6">
 							<div className="space-y-4">
 								<div>
-									<h4 className="font-medium mb-2">Database Seeding</h4>
+									<h4 className="font-medium mb-2">Development Data</h4>
 									<ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
 										<li>
-											Use "Fresh Demo Data" to clear and populate with demo data
+											Use the secure API service to create test data
+											programmatically
 										</li>
 										<li>
-											Use "Add Basic Data" to add minimal data without clearing
+											Database seeding functionality has been removed for
+											security
 										</li>
-										<li>Use preset options for specific seeding scenarios</li>
 										<li>
-											Always backup important data before clearing operations
+											All data operations now go through encrypted Tauri
+											commands
+										</li>
+										<li>
+											Refer to the API service documentation for creating test
+											data
 										</li>
 									</ul>
 								</div>
 
 								<div>
-									<h4 className="font-medium mb-2">Command Line Seeding</h4>
+									<h4 className="font-medium mb-2">Secure API Usage</h4>
 									<div className="bg-muted p-3 rounded-md">
 										<code className="text-sm">
-											npm run seed # Default seeding
+											import {`{`} apiService {`}`} from '@/lib/api-service';
 											<br />
-											npm run seed:clear # Clear and seed
+											await apiService.accounts.create(accountData);
 											<br />
-											npm run seed:minimal # Basic data only
-											<br />
-											npm run seed:demo # Demo configuration
+											await apiService.transactions.create(transactionData);
 										</code>
 									</div>
 								</div>

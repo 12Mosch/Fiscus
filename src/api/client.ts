@@ -828,6 +828,407 @@ export class FiscusApiClient {
 			throw handleApiError(error);
 		}
 	}
+
+	// ============================================================================
+	// Enhanced Account Methods (for database service compatibility)
+	// ============================================================================
+
+	/**
+	 * Get accounts with their account type information
+	 * @param userId User ID
+	 * @param filters Optional account filters
+	 * @returns Promise resolving to accounts with type details
+	 */
+	async getAccountsWithType(
+		userId: string,
+		filters?: Omit<AccountFilters, "user_id">,
+	): Promise<Account[]> {
+		try {
+			const accountFilters: AccountFilters = { user_id: userId, ...filters };
+			// The backend should return accounts with account_type joined
+			return await invoke("get_accounts", { filters: accountFilters });
+		} catch (error) {
+			throw handleApiError(error);
+		}
+	}
+
+	/**
+	 * Get total assets for a user
+	 * @param userId User ID
+	 * @returns Promise resolving to total assets amount
+	 */
+	async getTotalAssets(userId: string): Promise<number> {
+		try {
+			// This will need to be implemented as a new Tauri command
+			// For now, we'll calculate it from account summary
+			const summary = await this.getAccountSummary(userId);
+			return summary.total_assets || 0;
+		} catch (error) {
+			throw handleApiError(error);
+		}
+	}
+
+	/**
+	 * Get total liabilities for a user
+	 * @param userId User ID
+	 * @returns Promise resolving to total liabilities amount
+	 */
+	async getTotalLiabilities(userId: string): Promise<number> {
+		try {
+			// This will need to be implemented as a new Tauri command
+			// For now, we'll calculate it from account summary
+			const summary = await this.getAccountSummary(userId);
+			return summary.total_liabilities || 0;
+		} catch (error) {
+			throw handleApiError(error);
+		}
+	}
+
+	/**
+	 * Get account balances summary for a user
+	 * @param userId User ID
+	 * @returns Promise resolving to account balances
+	 */
+	async getAccountBalances(userId: string): Promise<
+		Array<{
+			account_id: string;
+			account_name: string;
+			current_balance: number;
+			currency: string;
+		}>
+	> {
+		try {
+			const accounts = await this.getAccounts({
+				user_id: userId,
+				is_active: true,
+			});
+			return accounts.map((account) => ({
+				account_id: account.id,
+				account_name: account.name,
+				current_balance: account.balance,
+				currency: account.currency,
+			}));
+		} catch (error) {
+			throw handleApiError(error);
+		}
+	}
+
+	// ============================================================================
+	// Enhanced Transaction Methods (for database service compatibility)
+	// ============================================================================
+
+	/**
+	 * Get transactions with detailed information (account and category details)
+	 * @param userId User ID
+	 * @param filters Optional transaction filters
+	 * @param options Query options for pagination and sorting
+	 * @returns Promise resolving to transactions with details and pagination info
+	 */
+	async getTransactionsWithDetails(
+		userId: string,
+		filters?: Omit<TransactionFilters, "user_id">,
+		options?: {
+			limit?: number;
+			offset?: number;
+			sort_by?: string;
+			sort_direction?: "ASC" | "DESC";
+		},
+	): Promise<{
+		data: Transaction[];
+		total: number;
+		page: number;
+		limit: number;
+	}> {
+		try {
+			const transactionFilters: TransactionFilters = {
+				user_id: userId,
+				...filters,
+				...options,
+			};
+
+			// Get transactions - the backend should return with joined account/category data
+			const transactions = await this.getTransactions(transactionFilters);
+
+			// For now, return in the expected format
+			// TODO: Backend should return pagination info
+			return {
+				data: transactions,
+				total: transactions.length,
+				page: Math.floor((options?.offset || 0) / (options?.limit || 50)) + 1,
+				limit: options?.limit || 50,
+			};
+		} catch (error) {
+			throw handleApiError(error);
+		}
+	}
+
+	/**
+	 * Get recent transactions for a user
+	 * @param userId User ID
+	 * @param limit Number of transactions to retrieve
+	 * @returns Promise resolving to recent transactions
+	 */
+	async getRecentTransactions(
+		userId: string,
+		limit: number = 10,
+	): Promise<Transaction[]> {
+		try {
+			const filters: TransactionFilters = {
+				user_id: userId,
+				limit,
+				sort_by: "transaction_date",
+				sort_direction: "DESC",
+			};
+			return await this.getTransactions(filters);
+		} catch (error) {
+			throw handleApiError(error);
+		}
+	}
+
+	/**
+	 * Get category spending summary for a user
+	 * @param userId User ID
+	 * @param startDate Optional start date filter
+	 * @param endDate Optional end date filter
+	 * @returns Promise resolving to category spending data
+	 */
+	async getCategorySpending(
+		userId: string,
+		startDate?: string,
+		endDate?: string,
+	): Promise<
+		Array<{
+			category_id: string;
+			category_name: string;
+			total_spent: number;
+			transaction_count: number;
+		}>
+	> {
+		try {
+			// This should be implemented as a dedicated Tauri command for better performance
+			// For now, we'll use the existing report methods
+			const reportData = await this.getSpendingByCategory(
+				userId,
+				startDate,
+				endDate,
+			);
+
+			// Transform report data to expected format
+			if (Array.isArray(reportData)) {
+				return reportData.map((item: Record<string, unknown>) => ({
+					category_id: (item.category_id as string) || "",
+					category_name:
+						(item.category as string) || (item.name as string) || "Unknown",
+					total_spent: Math.abs(
+						(item.amount as number) || (item.total as number) || 0,
+					),
+					transaction_count:
+						(item.count as number) || (item.transaction_count as number) || 0,
+				}));
+			}
+
+			return [];
+		} catch (error) {
+			throw handleApiError(error);
+		}
+	}
+
+	/**
+	 * Create a transaction with automatic balance update
+	 * @param request Transaction creation data
+	 * @returns Promise resolving to created transaction
+	 */
+	async createTransactionWithBalanceUpdate(
+		request: CreateTransactionRequest,
+	): Promise<Transaction> {
+		try {
+			// The backend should handle balance updates automatically
+			// This is just an alias to the regular create method
+			return await this.createTransaction(request);
+		} catch (error) {
+			throw handleApiError(error);
+		}
+	}
+
+	// ============================================================================
+	// Dashboard and Summary Methods
+	// ============================================================================
+
+	/**
+	 * Get comprehensive dashboard summary for a user
+	 * @param userId User ID
+	 * @returns Promise resolving to dashboard summary data
+	 */
+	async getDashboardSummary(userId: string): Promise<{
+		total_assets: number;
+		total_liabilities: number;
+		net_worth: number;
+		monthly_income: number;
+		monthly_expenses: number;
+		recent_transactions: Transaction[];
+		account_balances: Array<{
+			account_id: string;
+			account_name: string;
+			current_balance: number;
+			currency: string;
+		}>;
+		top_categories: Array<{
+			category_id: string;
+			category_name: string;
+			total_spent: number;
+			transaction_count: number;
+		}>;
+	}> {
+		try {
+			// Fetch all dashboard data in parallel for better performance
+			const [
+				totalAssets,
+				totalLiabilities,
+				accountBalances,
+				recentTransactions,
+				categorySpending,
+				transactionSummary,
+			] = await Promise.all([
+				this.getTotalAssets(userId),
+				this.getTotalLiabilities(userId),
+				this.getAccountBalances(userId),
+				this.getRecentTransactions(userId, 10),
+				this.getCategorySpending(userId),
+				this.getTransactionSummary(userId),
+			]);
+
+			const netWorth = totalAssets - totalLiabilities;
+
+			return {
+				total_assets: totalAssets,
+				total_liabilities: totalLiabilities,
+				net_worth: netWorth,
+				monthly_income: transactionSummary.total_income || 0,
+				monthly_expenses: Math.abs(transactionSummary.total_expenses || 0),
+				recent_transactions: recentTransactions,
+				account_balances: accountBalances,
+				top_categories: categorySpending.slice(0, 5), // Top 5 categories
+			};
+		} catch (error) {
+			throw handleApiError(error);
+		}
+	}
+
+	// ============================================================================
+	// Utility Methods
+	// ============================================================================
+
+	/**
+	 * Generate a new UUID for database records
+	 * @returns Promise resolving to a new UUID string
+	 */
+	async generateId(): Promise<string> {
+		// For security, we should generate IDs on the backend
+		// For now, use crypto.randomUUID() if available
+		if (typeof crypto !== "undefined" && crypto.randomUUID) {
+			return crypto.randomUUID();
+		}
+
+		// Fallback: generate a simple UUID-like string
+		// In production, this should be handled by the backend
+		return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+			const r = (Math.random() * 16) | 0;
+			const v = c === "x" ? r : (r & 0x3) | 0x8;
+			return v.toString(16);
+		});
+	}
+
+	/**
+	 * Format a date for database storage
+	 * @param date Date to format
+	 * @returns Formatted date string (YYYY-MM-DD)
+	 */
+	formatDateForDb(date: Date | string): string {
+		const dateObj = typeof date === "string" ? new Date(date) : date;
+
+		if (Number.isNaN(dateObj.getTime())) {
+			throw new FiscusApiError("Invalid date provided", "INVALID_INPUT");
+		}
+
+		return dateObj.toISOString().split("T")[0];
+	}
+
+	/**
+	 * Format a datetime for database storage
+	 * @param date Date to format
+	 * @returns Formatted datetime string (ISO format)
+	 */
+	formatDateTimeForDb(date: Date | string): string {
+		const dateObj = typeof date === "string" ? new Date(date) : date;
+
+		if (Number.isNaN(dateObj.getTime())) {
+			throw new FiscusApiError("Invalid date provided", "INVALID_INPUT");
+		}
+
+		return dateObj.toISOString();
+	}
+
+	/**
+	 * Validate that a string is a valid UUID
+	 * @param id String to validate
+	 * @returns True if valid UUID, false otherwise
+	 */
+	isValidId(id: string): boolean {
+		const uuidRegex =
+			/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+		return uuidRegex.test(id);
+	}
+
+	/**
+	 * Sanitize a string for SQL LIKE queries
+	 * @param input String to sanitize
+	 * @returns Sanitized string
+	 */
+	sanitizeForLike(input: string): string {
+		return input.replace(/[%_]/g, "\\$&");
+	}
+
+	/**
+	 * Get date range for common periods
+	 * @param period Period type
+	 * @returns Object with start and end dates
+	 */
+	getDateRange(period: "today" | "week" | "month" | "quarter" | "year"): {
+		start: string;
+		end: string;
+	} {
+		const now = new Date();
+		const start = new Date();
+
+		switch (period) {
+			case "today":
+				start.setHours(0, 0, 0, 0);
+				break;
+			case "week":
+				start.setDate(now.getDate() - now.getDay());
+				start.setHours(0, 0, 0, 0);
+				break;
+			case "month":
+				start.setDate(1);
+				start.setHours(0, 0, 0, 0);
+				break;
+			case "quarter": {
+				const quarter = Math.floor(now.getMonth() / 3);
+				start.setMonth(quarter * 3, 1);
+				start.setHours(0, 0, 0, 0);
+				break;
+			}
+			case "year":
+				start.setMonth(0, 1);
+				start.setHours(0, 0, 0, 0);
+				break;
+		}
+
+		return {
+			start: this.formatDateForDb(start),
+			end: this.formatDateForDb(now),
+		};
+	}
 }
 
 /**

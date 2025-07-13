@@ -14,22 +14,22 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
-import { databaseService, formatDateForDb, generateId } from "@/lib/database";
+import { apiService, apiUtils } from "@/lib/api-service";
 import {
 	useAccountOperations,
-	useDatabaseStatus,
+	useApiStatus,
 	useTransactionOperations,
 } from "@/lib/database/hooks";
 import type {
-	CreateAccountInput,
-	CreateTransactionInput,
-} from "@/lib/database/types";
+	CreateAccountRequest,
+	CreateTransactionRequest,
+} from "@/types/api";
 
 // Development-only component that gets tree-shaken in production
 function DatabaseTestImpl() {
 	const [testResults, setTestResults] = useState<string[]>([]);
 	const [isRunning, setIsRunning] = useState(false);
-	const { connected, version, loading: statusLoading } = useDatabaseStatus();
+	const { connected, loading: statusLoading } = useApiStatus();
 	const { createAccount, loading: accountLoading } = useAccountOperations();
 	const { createTransaction, loading: transactionLoading } =
 		useTransactionOperations();
@@ -46,28 +46,25 @@ function DatabaseTestImpl() {
 		setTestResults([]);
 
 		try {
-			addResult("🚀 Starting database tests...");
+			addResult("🚀 Starting API service tests...");
 
-			// Test 1: Database connection
-			addResult("📡 Testing database connection...");
-			const health = await databaseService.getHealthStatus();
-			addResult(
-				`✅ Database connected: ${health.connected}, version: ${health.version}`,
-			);
+			// Test 1: API service connection
+			addResult("📡 Testing API service connection...");
+			await apiService.initialize();
+			addResult(`✅ API service connected: ${connected}`);
 
 			// Test 2: Create test user ID
-			const testUserId = generateId();
+			const testUserId = await apiUtils.generateId();
 			addResult(`👤 Generated test user ID: ${testUserId.substring(0, 8)}...`);
 
 			// Test 3: Create test account
 			addResult("🏦 Creating test account...");
-			const accountData: CreateAccountInput = {
+			const accountData: CreateAccountRequest = {
 				user_id: testUserId,
 				account_type_id: "checking",
 				name: "Test Checking Account",
 				description: "Test account created by DatabaseTest component",
 				initial_balance: 1000.0,
-				current_balance: 1000.0,
 				currency: "USD",
 				is_active: true,
 				institution_name: "Test Bank",
@@ -83,12 +80,12 @@ function DatabaseTestImpl() {
 
 			// Test 4: Create test transaction
 			addResult("💰 Creating test transaction...");
-			const transactionData: CreateTransactionInput = {
+			const transactionData: CreateTransactionRequest = {
 				user_id: testUserId,
 				account_id: account.id,
 				amount: -50.0,
 				description: "Test expense transaction",
-				transaction_date: formatDateForDb(new Date()),
+				transaction_date: apiUtils.formatDate(new Date()),
 				transaction_type: "expense",
 				status: "completed",
 				payee: "Test Store",
@@ -105,12 +102,10 @@ function DatabaseTestImpl() {
 
 			// Test 5: Verify account balance update
 			addResult("🔍 Verifying account balance update...");
-			const updatedAccount = await databaseService.accounts.findById(
-				account.id,
-			);
+			const updatedAccount = await apiService.accounts.findById(account.id);
 			if (updatedAccount) {
 				addResult(
-					`✅ Account balance updated: $${updatedAccount.current_balance} (was $${account.current_balance})`,
+					`✅ Account balance updated: $${updatedAccount.balance} (was $${account.balance})`,
 				);
 			} else {
 				addResult("❌ Failed to retrieve updated account");
@@ -119,16 +114,15 @@ function DatabaseTestImpl() {
 			// Test 6: Query transactions
 			addResult("📊 Querying transactions...");
 			const transactions =
-				await databaseService.transactions.findWithDetails(testUserId);
+				await apiService.transactions.findWithDetails(testUserId);
 			addResult(`✅ Found ${transactions.data.length} transaction(s)`);
 
 			// Test 7: Get account balances
 			addResult("💳 Getting account balances...");
-			const balances =
-				await databaseService.accounts.getAccountBalances(testUserId);
+			const balances = await apiService.accounts.getAccountBalances(testUserId);
 			addResult(`✅ Found ${balances.length} account balance(s)`);
 
-			addResult("🎉 All database tests completed successfully!");
+			addResult("🎉 All API service tests completed successfully!");
 		} catch (error) {
 			addResult(
 				`❌ Test failed: ${error instanceof Error ? error.message : "Unknown error"}`,
@@ -146,19 +140,19 @@ function DatabaseTestImpl() {
 	return (
 		<Card className="w-full max-w-4xl mx-auto">
 			<CardHeader>
-				<CardTitle>Database Integration Test</CardTitle>
+				<CardTitle>API Service Integration Test</CardTitle>
 				<CardDescription>
-					Test the Tauri SQL plugin integration and database operations
+					Test the secure API service integration and database operations
 				</CardDescription>
 			</CardHeader>
 			<CardContent className="space-y-4">
-				{/* Database Status */}
+				{/* API Status */}
 				<div className="flex items-center gap-4">
-					<span className="font-medium">Database Status:</span>
+					<span className="font-medium">API Service Status:</span>
 					{statusLoading ? (
 						<Badge variant="secondary">Loading...</Badge>
 					) : connected ? (
-						<Badge variant="default">Connected (v{version})</Badge>
+						<Badge variant="default">Connected</Badge>
 					) : (
 						<Badge variant="destructive">Disconnected</Badge>
 					)}
@@ -170,7 +164,7 @@ function DatabaseTestImpl() {
 						onClick={runDatabaseTests}
 						disabled={isRunning || accountLoading || transactionLoading}
 					>
-						{isRunning ? "Running Tests..." : "Run Database Tests"}
+						{isRunning ? "Running Tests..." : "Run API Tests"}
 					</Button>
 					<Button variant="outline" onClick={clearResults} disabled={isRunning}>
 						Clear Results
@@ -200,12 +194,11 @@ function DatabaseTestImpl() {
 					</p>
 					<ul className="list-disc list-inside space-y-1">
 						<li>
-							This component tests the database integration in the Tauri
-							environment
+							This component tests the secure API service integration in the
+							Tauri environment
 						</li>
 						<li>
-							Click "Run Database Tests" to execute a series of database
-							operations
+							Click "Run API Tests" to execute a series of secure API operations
 						</li>
 						<li>
 							The tests will create a test account and transaction to verify

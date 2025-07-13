@@ -61,21 +61,27 @@ npm test -- src/components/debug/__tests__/DatabaseTest.test.tsx
 ```
 
 Test coverage includes:
+
 - Development mode rendering
 - Production mode stub behavior
 - Warning message logging
 - Environment variable handling
 
-### DatabaseSeeder Component
+### DatabaseSeeder Component (Removed)
 
-The `DatabaseSeeder` component provides a UI for database seeding operations. Like the `DatabaseTest` component, it's designed for development use only.
+The `DatabaseSeeder` component has been **removed** as part of the security migration. Database seeding functionality is no longer available through the UI.
 
-#### Features
+#### Migration to Secure API Service
 
-- **Preset Configurations**: Multiple seeding presets (minimal, demo, full)
-- **Selective Seeding**: Choose which data types to seed
-- **Clear Operations**: Database clearing functionality
-- **Progress Tracking**: Real-time seeding progress display
+For development data creation, use the secure API service programmatically:
+
+```typescript
+import { apiService } from '@/lib/api-service';
+
+// Create test data using the secure API
+const account = await apiService.accounts.create(accountData);
+const transaction = await apiService.transactions.create(transactionData);
+```
 
 ## Development Routes
 

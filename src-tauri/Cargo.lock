@@ -1289,6 +1289,7 @@ dependencies = [
  "hex",
  "hkdf",
  "mockall",
+ "once_cell",
  "pbkdf2",
  "rand 0.8.5",
  "regex",

@@ -91,6 +91,22 @@ let summary = monitor.get_summary();
 // System metrics: request counts, uptime
 ```
 
+### Configurable Performance Thresholds
+
+The logging middleware supports configurable performance warning thresholds:
+
+```rust
+use fiscus::logging::LoggingMiddleware;
+
+// Use default 1000ms threshold
+let middleware = LoggingMiddleware::new();
+
+// Use custom threshold (e.g., 500ms for critical operations)
+let middleware = LoggingMiddleware::with_threshold(500);
+```
+
+Performance warnings are logged when command execution exceeds the configured threshold, helping identify slow operations that may need optimization.
+
 ## Database Logging
 
 Automatic logging for all database operations:

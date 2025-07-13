@@ -36,6 +36,7 @@ impl RequestContext {
 /// Logging middleware for Tauri commands
 pub struct LoggingMiddleware {
     sanitizer: DataSanitizer,
+    performance_threshold_ms: u64,
 }
 
 impl Default for LoggingMiddleware {
@@ -48,6 +49,14 @@ impl LoggingMiddleware {
     pub fn new() -> Self {
         Self {
             sanitizer: DataSanitizer::new(),
+            performance_threshold_ms: 1000, // Default to 1000ms
+        }
+    }
+
+    pub fn with_threshold(threshold_ms: u64) -> Self {
+        Self {
+            sanitizer: DataSanitizer::new(),
+            performance_threshold_ms: threshold_ms,
         }
     }
 
@@ -111,15 +120,15 @@ impl LoggingMiddleware {
     }
 
     /// Log performance warning for slow commands
-    pub fn log_performance_warning(&self, ctx: &RequestContext, threshold_ms: u64) {
+    pub fn log_performance_warning(&self, ctx: &RequestContext) {
         let duration = ctx.elapsed();
-        if duration.as_millis() > threshold_ms as u128 {
+        if duration.as_millis() > self.performance_threshold_ms as u128 {
             warn!(
                 request_id = %ctx.request_id,
                 command = %ctx.command_name,
                 user_id = ctx.user_id.as_deref(),
                 duration_ms = duration.as_millis(),
-                threshold_ms = threshold_ms,
+                threshold_ms = self.performance_threshold_ms,
                 "Command execution exceeded performance threshold"
             );
         }
@@ -154,7 +163,7 @@ macro_rules! logged_command {
             match &result {
                 Ok(response) => {
                     middleware.log_success(&ctx, response);
-                    middleware.log_performance_warning(&ctx, 1000); // 1 second threshold
+                    middleware.log_performance_warning(&ctx);
                 }
                 Err(error) => {
                     middleware.log_error(&ctx, error);
@@ -203,7 +212,7 @@ where
         match &result {
             Ok(response) => {
                 middleware.log_success(&ctx, response);
-                middleware.log_performance_warning(&ctx, 1000);
+                middleware.log_performance_warning(&ctx);
             }
             Err(error) => {
                 middleware.log_error(&ctx, error);
@@ -250,7 +259,7 @@ where
         match &result {
             Ok(response) => {
                 middleware.log_success(&ctx, response);
-                middleware.log_performance_warning(&ctx, 1000);
+                middleware.log_performance_warning(&ctx);
             }
             Err(error) => {
                 middleware.log_error(&ctx, error);
@@ -397,5 +406,21 @@ mod tests {
             .await;
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_configurable_threshold() {
+        // Test default threshold
+        let middleware_default = LoggingMiddleware::new();
+        let ctx = RequestContext::new("test_command", Some("user123".to_string()));
+
+        // Test custom threshold
+        let middleware_custom = LoggingMiddleware::with_threshold(500);
+
+        // We can't easily test the actual warning without capturing logs,
+        // but we can verify the middleware was created with the right threshold
+        // by checking that the methods exist and don't panic
+        middleware_default.log_performance_warning(&ctx);
+        middleware_custom.log_performance_warning(&ctx);
     }
 }

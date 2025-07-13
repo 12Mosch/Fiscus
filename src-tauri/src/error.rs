@@ -1,4 +1,6 @@
 use aes_gcm::aead;
+use once_cell::sync::Lazy;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::error;
@@ -235,6 +237,12 @@ impl From<base64::DecodeError> for FiscusError {
 /// Result type alias for Fiscus operations
 pub type FiscusResult<T> = Result<T, FiscusError>;
 
+/// Lazy static regex for email validation - compiled once for better performance
+static EMAIL_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+        .expect("Failed to compile email regex - this should never happen")
+});
+
 /// Validation utilities
 pub struct Validator;
 
@@ -269,10 +277,7 @@ impl Validator {
 
     /// Validate email format
     pub fn validate_email(email: &str) -> FiscusResult<()> {
-        let email_regex = regex::Regex::new(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
-            .map_err(|e| FiscusError::Internal(format!("Regex compilation error: {e}")))?;
-
-        if !email_regex.is_match(email) {
+        if !EMAIL_REGEX.is_match(email) {
             return Err(FiscusError::Validation("Invalid email format".to_string()));
         }
 
@@ -562,6 +567,30 @@ mod tests {
             assert!(Validator::validate_email("test@").is_err());
             assert!(Validator::validate_email("test@.com").is_err());
             assert!(Validator::validate_email("").is_err());
+        }
+
+        #[test]
+        fn test_email_validation_performance() {
+            // Test that multiple calls to validate_email work efficiently
+            // This test ensures the lazy static regex is working correctly
+            let test_emails = vec![
+                "test1@example.com",
+                "test2@example.com",
+                "test3@example.com",
+                "invalid-email",
+                "test4@example.com",
+            ];
+
+            // Multiple iterations to ensure regex is reused
+            for _ in 0..100 {
+                for email in &test_emails {
+                    let _ = Validator::validate_email(email);
+                }
+            }
+
+            // Verify the regex still works correctly after many calls
+            assert!(Validator::validate_email("final@test.com").is_ok());
+            assert!(Validator::validate_email("invalid").is_err());
         }
 
         #[test]

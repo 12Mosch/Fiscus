@@ -237,7 +237,7 @@ impl AsymmetricEncryption for RsaEncryption {
         _data: &[u8],
         _private_key: &EncryptionKey,
     ) -> EncryptionResult<Vec<u8>> {
-        // For RSA signatures, we'd typically use PSS or PKCS#1 v1.5
+        // TODO: For RSA signatures, we'd typically use PSS or PKCS#1 v1.5
         // This is a simplified implementation
         warn!("RSA signing not fully implemented in this version");
         Err(FiscusError::Internal(

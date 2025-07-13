@@ -200,7 +200,14 @@ pub async fn update_account(
 ```rust
 // src-tauri/src/validation.rs
 use regex::Regex;
+use once_cell::sync::Lazy;
 use uuid::Uuid;
+
+// Lazy static regex for email validation - compiled once for better performance
+static EMAIL_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+        .expect("Failed to compile email regex - this should never happen")
+});
 
 pub struct Validator;
 
@@ -237,11 +244,10 @@ impl Validator {
     }
 
     /// Validate email format
+    /// Uses a lazy static regex for optimal performance - compiled once on first use
     pub fn validate_email(email: &str) -> Result<(), FiscusError> {
-        let email_regex = Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
-            .map_err(|e| FiscusError::Internal(format!("Regex compilation failed: {}", e)))?;
-
-        if !email_regex.is_match(email) {
+        // EMAIL_REGEX is a lazy static compiled once for better performance
+        if !EMAIL_REGEX.is_match(email) {
             return Err(FiscusError::Validation("Invalid email format".to_string()));
         }
 
@@ -833,6 +839,53 @@ export class SecureApiClient {
 
 export const secureApiClient = SecureApiClient.getInstance();
 ```
+
+## Performance Optimizations
+
+### Regex Compilation Optimization
+
+For frequently used validation patterns like email validation, compile regex patterns once using lazy static initialization instead of compiling on every validation call:
+
+```rust
+use once_cell::sync::Lazy;
+use regex::Regex;
+
+// ❌ Bad: Compiles regex on every call
+pub fn validate_email_slow(email: &str) -> Result<(), FiscusError> {
+    let email_regex = Regex::new(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")?;
+    if !email_regex.is_match(email) {
+        return Err(FiscusError::Validation("Invalid email format".to_string()));
+    }
+    Ok(())
+}
+
+// ✅ Good: Compiles regex once, reuses for all calls
+static EMAIL_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+        .expect("Failed to compile email regex")
+});
+
+pub fn validate_email(email: &str) -> Result<(), FiscusError> {
+    if !EMAIL_REGEX.is_match(email) {
+        return Err(FiscusError::Validation("Invalid email format".to_string()));
+    }
+    Ok(())
+}
+```
+
+### Benefits
+
+- **Performance**: Regex compilation is expensive; doing it once improves performance significantly
+- **Memory**: Reduces memory allocations for repeated validations
+- **Reliability**: Compilation errors are caught at startup rather than during validation
+- **Thread Safety**: `Lazy<Regex>` is thread-safe and can be shared across threads
+
+### Implementation Guidelines
+
+1. Use `once_cell::sync::Lazy` for static regex patterns
+2. Handle compilation errors with `expect()` for patterns that should never fail
+3. Group related patterns together for better organization
+4. Document the performance benefit in code comments
 
 ## Security Best Practices
 

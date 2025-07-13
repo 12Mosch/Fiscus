@@ -63,11 +63,9 @@ function DatabaseTestImpl() {
 				user_id: testUserId,
 				account_type_id: "checking",
 				name: "Test Checking Account",
-				description: "Test account created by DatabaseTest component",
-				initial_balance: 1000.0,
+				balance: 1000.0,
 				currency: "USD",
-				is_active: true,
-				institution_name: "Test Bank",
+				account_number: "TEST-123456789",
 			};
 
 			const account = await createAccount(accountData);
@@ -87,7 +85,6 @@ function DatabaseTestImpl() {
 				description: "Test expense transaction",
 				transaction_date: apiUtils.formatDate(new Date()),
 				transaction_type: "expense",
-				status: "completed",
 				payee: "Test Store",
 				notes: "Created by DatabaseTest component",
 			};

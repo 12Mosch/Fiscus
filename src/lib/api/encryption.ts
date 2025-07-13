@@ -5,7 +5,7 @@
  * type-safe access to encryption operations from the frontend.
  */
 
-import { invoke } from "@tauri-apps/api/tauri";
+import { invoke } from "@tauri-apps/api/core";
 
 // Encryption algorithm types
 export enum EncryptionAlgorithm {
@@ -320,17 +320,38 @@ export class EncryptionApiClient {
 }
 
 /**
- * Encode string data to base64 for transmission
+ * Encode string data to base64 for transmission using TextEncoder
  */
 export function encodeToBase64(data: string): string {
-	return btoa(unescape(encodeURIComponent(data)));
+	// Use TextEncoder for proper UTF-8 encoding
+	const encoder = new TextEncoder();
+	const bytes = encoder.encode(data);
+
+	// Convert Uint8Array to string for btoa
+	let binaryString = "";
+	for (let i = 0; i < bytes.length; i++) {
+		binaryString += String.fromCharCode(bytes[i]);
+	}
+
+	return btoa(binaryString);
 }
 
 /**
- * Decode base64 data to string
+ * Decode base64 data to string using TextDecoder
  */
 export function decodeFromBase64(base64Data: string): string {
-	return decodeURIComponent(escape(atob(base64Data)));
+	// Decode base64 to binary string
+	const binaryString = atob(base64Data);
+
+	// Convert binary string to Uint8Array
+	const bytes = new Uint8Array(binaryString.length);
+	for (let i = 0; i < binaryString.length; i++) {
+		bytes[i] = binaryString.charCodeAt(i);
+	}
+
+	// Use TextDecoder for proper UTF-8 decoding
+	const decoder = new TextDecoder();
+	return decoder.decode(bytes);
 }
 
 /**

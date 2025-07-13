@@ -334,6 +334,7 @@ mod tests {
 
     #[test]
     fn test_hash_password() {
+        // deepcode ignore HardcodedPassword: <test>
         let password = "test_password_123";
         let result = hash_password(password);
 
@@ -352,6 +353,7 @@ mod tests {
 
     #[test]
     fn test_hash_password_different_salts() {
+        // deepcode ignore HardcodedPassword: <test>
         let password = "test_password_123";
         let hash1 = hash_password(password).unwrap();
         let hash2 = hash_password(password).unwrap();
@@ -362,6 +364,7 @@ mod tests {
 
     #[test]
     fn test_verify_password_correct() {
+        // deepcode ignore HardcodedPassword: <test>
         let password = "test_password_123";
         let hash = hash_password(password).unwrap();
 
@@ -372,7 +375,9 @@ mod tests {
 
     #[test]
     fn test_verify_password_incorrect() {
+        // deepcode ignore HardcodedPassword: <test>
         let password = "test_password_123";
+        // deepcode ignore HardcodedPassword: <test>
         let wrong_password = "wrong_password";
         let hash = hash_password(password).unwrap();
 
@@ -383,6 +388,7 @@ mod tests {
 
     #[test]
     fn test_verify_password_invalid_hash() {
+        // deepcode ignore HardcodedPassword: <test>
         let password = "test_password_123";
         let invalid_hash = "invalid_hash_format";
 
@@ -540,6 +546,7 @@ mod tests {
 
     #[test]
     fn test_password_hash_format() {
+        // deepcode ignore HardcodedPassword: <test>
         let password = "test_password_123";
         let hash = hash_password(password).unwrap();
 

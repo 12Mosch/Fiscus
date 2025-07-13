@@ -335,6 +335,7 @@ async fn test_ed25519_edge_cases() {
 /// Test key derivation with different parameters
 #[tokio::test]
 async fn test_key_derivation_parameters() {
+    // deepcode ignore HardcodedPassword: <test>
     let password = b"test_password_123";
     let salt = vec![0x42u8; 32];
 

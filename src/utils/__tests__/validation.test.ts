@@ -300,6 +300,7 @@ describe("Request Validation Functions", () => {
 			const request: CreateUserRequest = {
 				username: "testuser",
 				email: "test@example.com",
+				// file deepcode ignore NoHardcodedPasswords/test: <test>
 				password: "StrongPass123!",
 			};
 

@@ -234,6 +234,7 @@ mod tests {
     async fn test_financial_data_encryption_roundtrip() {
         let service = EncryptionService::new().unwrap();
         let test_data = b"sensitive financial data: $12,345.67";
+        // deepcode ignore NoHardcodedCredentials: <test>
         let user_id = "test-user-123";
         let data_type = "transaction_amount";
 

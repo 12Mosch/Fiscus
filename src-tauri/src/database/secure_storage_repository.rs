@@ -468,6 +468,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_generate_storage_key() {
+        // deepcode ignore NoHardcodedCredentials: <test>
         let user_id = "test-user-123";
         let data_type = "user_preferences";
 

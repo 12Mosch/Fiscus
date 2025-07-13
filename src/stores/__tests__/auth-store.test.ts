@@ -80,7 +80,9 @@ describe("AuthStore", () => {
 			};
 
 			const loginRequest: LoginRequest = {
+				// file deepcode ignore NoHardcodedCredentials/test: <test>
 				username: "testuser",
+				// file deepcode ignore NoHardcodedPasswords/test: <test>
 				password: "password123",
 			};
 

@@ -456,6 +456,7 @@ mod tests {
             .expect("Failed to initialize encryption service for test");
 
         let original_value = "sensitive data";
+        // deepcode ignore NoHardcodedCredentials: <test>
         let user_id = "test-user";
         let field_name = "test_field";
 
@@ -491,6 +492,7 @@ mod tests {
             ("category".to_string(), Value::String("food".to_string())),
         ];
 
+        // deepcode ignore NoHardcodedCredentials: <test>
         let user_id = "test-user";
         let table_name = "transactions";
 
@@ -527,7 +529,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_encrypt_query_params_security_guard() {
+        // deepcode ignore NoHardcodedCredentials: <test>
         let params = vec![Value::String("sensitive_data".to_string())];
+        // deepcode ignore NoHardcodedCredentials: <test>
         let user_id = "test-user";
         let table_name = "transactions"; // Has encrypted fields
 
@@ -578,7 +582,8 @@ mod tests {
             "description".to_string(),
             Value::String("Test transaction".to_string()),
         );
-
+        
+        // deepcode ignore NoHardcodedCredentials: <test>
         let user_id = "test-user";
         let table_name = "transactions";
 

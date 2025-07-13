@@ -16,6 +16,7 @@ use std::time::{Duration, Instant};
 #[tokio::test]
 async fn test_rate_limiting() {
     let mut rate_limiter = RateLimiter::new();
+    // deepcode ignore NoHardcodedCredentials: <test>
     let user_id = "test-user-rate-limit";
     let operation = "encrypt_financial_data";
 
@@ -333,6 +334,7 @@ async fn test_key_isolation() {
 async fn test_data_type_isolation() {
     let service = EncryptionService::new().expect("Failed to create encryption service");
 
+    // deepcode ignore NoHardcodedCredentials: <test>
     let user_id = "test-user";
     let data_type1 = "transaction_amount";
     let data_type2 = "account_balance";
@@ -374,6 +376,7 @@ async fn test_data_type_isolation() {
 async fn test_encryption_randomness() {
     let service = EncryptionService::new().expect("Failed to create encryption service");
 
+    // deepcode ignore NoHardcodedCredentials: <test>
     let user_id = "test-user";
     let data_type = "test_data";
     let test_data = b"identical data";

@@ -393,6 +393,7 @@ mod tests {
     #[tokio::test]
     async fn test_rate_limiter() {
         let mut rate_limiter = RateLimiter::new();
+        // deepcode ignore NoHardcodedCredentials: <test>
         let user_id = "test-user";
         let operation = "encrypt_financial_data";
 

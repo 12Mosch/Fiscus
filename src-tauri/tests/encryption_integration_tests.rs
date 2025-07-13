@@ -21,6 +21,7 @@ use fiscus_lib::{
 async fn test_encryption_service_workflow() {
     let service = EncryptionService::new().expect("Failed to create encryption service");
 
+    // file deepcode ignore NoHardcodedCredentials: <test>
     let user_id = "test-user-123";
     let data_type = "transaction_amount";
     let test_data = b"$12,345.67 - Salary payment from ACME Corp";
@@ -212,6 +213,7 @@ async fn test_asymmetric_encryption_algorithms() {
 #[tokio::test]
 async fn test_key_derivation() {
     let kdf = Argon2Kdf::new().expect("Failed to create Argon2 KDF");
+    // file deepcode ignore HardcodedPassword/test: <test>
     let password = b"test_password_123!@#";
 
     // Generate parameters

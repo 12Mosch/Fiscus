@@ -379,6 +379,7 @@ mod tests {
     #[tokio::test]
     async fn test_argon2_key_derivation() {
         let kdf = Argon2Kdf::new().unwrap();
+        // deepcode ignore HardcodedPassword: <test>
         let password = b"test_password_123";
         let params = kdf.generate_params(32).unwrap();
 
@@ -390,6 +391,7 @@ mod tests {
         assert!(is_valid);
 
         // Verify wrong password
+        // deepcode ignore HardcodedPassword: <test>
         let wrong_password = b"wrong_password";
         let is_invalid = kdf
             .verify_password(wrong_password, &key, &params)
@@ -401,6 +403,7 @@ mod tests {
     #[tokio::test]
     async fn test_pbkdf2_key_derivation() {
         let kdf = Pbkdf2Kdf::new().unwrap();
+        // deepcode ignore HardcodedPassword: <test>
         let password = b"test_password_123";
         let params = kdf.generate_params(32).unwrap();
 
@@ -414,6 +417,7 @@ mod tests {
     #[tokio::test]
     async fn test_scrypt_key_derivation() {
         let kdf = ScryptKdf::new().unwrap();
+        // deepcode ignore HardcodedPassword: <test>
         let password = b"test_password_123";
         let params = kdf.generate_params(32).unwrap();
 

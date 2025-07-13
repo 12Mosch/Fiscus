@@ -673,6 +673,7 @@ mod tests {
     #[tokio::test]
     async fn test_validate_user_exists_placeholder() {
         let db = "test_db".to_string();
+        // deepcode ignore NoHardcodedCredentials: <test>
         let user_id = "user-123";
 
         let result = DatabaseUtils::validate_user_exists(&db, user_id).await;
@@ -685,6 +686,7 @@ mod tests {
     async fn test_validate_account_ownership_placeholder() {
         let db = "test_db".to_string();
         let account_id = "account-123";
+        // deepcode ignore NoHardcodedCredentials: <test>
         let user_id = "user-456";
 
         let result = DatabaseUtils::validate_account_ownership(&db, account_id, user_id).await;
@@ -695,7 +697,9 @@ mod tests {
     #[tokio::test]
     async fn test_validate_category_ownership_placeholder() {
         let db = "test_db".to_string();
+        // deepcode ignore NoHardcodedCredentials: <test>
         let category_id = "category-123";
+        // deepcode ignore NoHardcodedCredentials: <test>
         let user_id = "user-456";
 
         let result = DatabaseUtils::validate_category_ownership(&db, category_id, user_id).await;

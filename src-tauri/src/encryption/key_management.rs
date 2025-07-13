@@ -461,6 +461,7 @@ mod tests {
     #[tokio::test]
     async fn test_key_creation_and_retrieval() {
         let key_manager = KeyManager::new().unwrap();
+        // deepcode ignore NoHardcodedCredentials: <test>
         let user_id = "test-user";
         let data_type = "transaction_amount";
 
@@ -478,7 +479,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_key_rotation() {
+        // deepcode ignore NoHardcodedCredentials: <test>
         let key_manager = KeyManager::new().unwrap();
+        // deepcode ignore NoHardcodedCredentials: <test>
         let user_id = "test-user";
 
         // Create a key first
@@ -498,6 +501,7 @@ mod tests {
     #[tokio::test]
     async fn test_user_key_listing() {
         let key_manager = KeyManager::new().unwrap();
+        // deepcode ignore NoHardcodedCredentials: <test>
         let user_id = "test-user";
 
         // Create multiple keys

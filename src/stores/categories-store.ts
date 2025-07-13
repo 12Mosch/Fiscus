@@ -210,7 +210,8 @@ export const useCategoriesStore = create<CategoriesStore>()((set, get) => ({
 					error: null,
 				}));
 			} else {
-				set({ loading: false,
+				set({
+					loading: false,
 					error: new FiscusApiError(
 						"Category deletion failed - it may have associated transactions",
 						"VALIDATION_ERROR",

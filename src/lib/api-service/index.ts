@@ -6,7 +6,7 @@
  * but uses the secure Tauri API commands instead of direct database access.
  */
 
-import { apiClient } from "@/api/client";
+import { apiClient, FiscusApiError } from "@/api/client";
 import type {
 	Account,
 	AccountFilters,
@@ -26,6 +26,21 @@ export interface QueryOptions {
 		field: string;
 		direction: "asc" | "desc";
 	};
+}
+
+/**
+ * Validates and normalizes sort direction to uppercase format
+ * @param direction - The sort direction string (case insensitive)
+ * @returns "ASC" | "DESC" for valid directions, undefined for invalid/missing input
+ */
+function normalizeSortDirection(
+	direction?: string,
+): "ASC" | "DESC" | undefined {
+	if (!direction) return undefined;
+	const upperDirection = direction.toUpperCase();
+	if (upperDirection === "ASC") return "ASC";
+	if (upperDirection === "DESC") return "DESC";
+	return undefined;
 }
 
 export interface QueryResult<T> {
@@ -73,9 +88,13 @@ export class ApiAccountRepository {
 	async findById(id: string): Promise<Account | null> {
 		try {
 			return await apiClient.getAccountById(id);
-		} catch (_error) {
-			// If account not found, return null instead of throwing
-			return null;
+		} catch (error: unknown) {
+			// Only return null for "not found" errors
+			if (error instanceof FiscusApiError && error.code === "NOT_FOUND") {
+				return null;
+			}
+			// Re-throw other errors
+			throw error;
 		}
 	}
 
@@ -92,7 +111,7 @@ export class ApiAccountRepository {
 			limit: options.limit,
 			offset: options.offset,
 			sort_by: options.sort?.field,
-			sort_direction: options.sort?.direction?.toUpperCase() as "ASC" | "DESC",
+			sort_direction: normalizeSortDirection(options.sort?.direction),
 		};
 
 		return await apiClient.getAccounts(filters);
@@ -109,7 +128,7 @@ export class ApiAccountRepository {
 			limit: options.limit,
 			offset: options.offset,
 			sort_by: options.sort?.field,
-			sort_direction: options.sort?.direction?.toUpperCase() as "ASC" | "DESC",
+			sort_direction: normalizeSortDirection(options.sort?.direction),
 		};
 
 		return await apiClient.getAccountsWithType(userId, filters);
@@ -209,7 +228,7 @@ export class ApiTransactionRepository {
 			limit: options?.limit,
 			offset: options?.offset,
 			sort_by: options?.sort?.field,
-			sort_direction: options?.sort?.direction?.toUpperCase() as "ASC" | "DESC",
+			sort_direction: normalizeSortDirection(options?.sort?.direction),
 		};
 
 		return await apiClient.getTransactionsWithDetails(

@@ -8,70 +8,70 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from './routes/__root'
-import { Route as DevRouteImport } from './routes/dev'
-import { Route as IndexRouteImport } from './routes/index'
+import { Route as rootRouteImport } from "./routes/__root";
+import { Route as DevRouteImport } from "./routes/dev";
+import { Route as IndexRouteImport } from "./routes/index";
 
 const DevRoute = DevRouteImport.update({
-  id: '/dev',
-  path: '/dev',
-  getParentRoute: () => rootRouteImport,
-} as any)
+	id: "/dev",
+	path: "/dev",
+	getParentRoute: () => rootRouteImport,
+} as any);
 const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
+	id: "/",
+	path: "/",
+	getParentRoute: () => rootRouteImport,
+} as any);
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '/dev': typeof DevRoute
+	"/": typeof IndexRoute;
+	"/dev": typeof DevRoute;
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '/dev': typeof DevRoute
+	"/": typeof IndexRoute;
+	"/dev": typeof DevRoute;
 }
 export interface FileRoutesById {
-  __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
-  '/dev': typeof DevRoute
+	__root__: typeof rootRouteImport;
+	"/": typeof IndexRoute;
+	"/dev": typeof DevRoute;
 }
 export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/dev'
-  fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/dev'
-  id: '__root__' | '/' | '/dev'
-  fileRoutesById: FileRoutesById
+	fileRoutesByFullPath: FileRoutesByFullPath;
+	fullPaths: "/" | "/dev";
+	fileRoutesByTo: FileRoutesByTo;
+	to: "/" | "/dev";
+	id: "__root__" | "/" | "/dev";
+	fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
-  DevRoute: typeof DevRoute
+	IndexRoute: typeof IndexRoute;
+	DevRoute: typeof DevRoute;
 }
 
-declare module '@tanstack/react-router' {
-  interface FileRoutesByPath {
-    '/dev': {
-      id: '/dev'
-      path: '/dev'
-      fullPath: '/dev'
-      preLoaderRoute: typeof DevRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-  }
+declare module "@tanstack/react-router" {
+	interface FileRoutesByPath {
+		"/dev": {
+			id: "/dev";
+			path: "/dev";
+			fullPath: "/dev";
+			preLoaderRoute: typeof DevRouteImport;
+			parentRoute: typeof rootRouteImport;
+		};
+		"/": {
+			id: "/";
+			path: "/";
+			fullPath: "/";
+			preLoaderRoute: typeof IndexRouteImport;
+			parentRoute: typeof rootRouteImport;
+		};
+	}
 }
 
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
-  DevRoute: DevRoute,
-}
+	IndexRoute: IndexRoute,
+	DevRoute: DevRoute,
+};
 export const routeTree = rootRouteImport
-  ._addFileChildren(rootRouteChildren)
-  ._addFileTypes<FileRouteTypes>()
+	._addFileChildren(rootRouteChildren)
+	._addFileTypes<FileRouteTypes>();

@@ -45,19 +45,19 @@ pub async fn secure_store(request: SecureStoreRequest) -> FiscusResult<SecureSto
     // Validate input
     Validator::validate_uuid(&request.user_id, "user_id")?;
     Validator::validate_string(&request.data_type, "data_type", 1, 100)?;
-    
+
     if request.encrypted_data.is_empty() {
         return Err(FiscusError::InvalidInput(
             "Encrypted data cannot be empty".to_string(),
         ));
     }
-    
+
     if request.nonce.is_empty() {
         return Err(FiscusError::InvalidInput(
             "Nonce cannot be empty".to_string(),
         ));
     }
-    
+
     if request.key_id.is_empty() {
         return Err(FiscusError::InvalidInput(
             "Key ID cannot be empty".to_string(),
@@ -139,7 +139,7 @@ pub async fn secure_retrieve(
                 storage_key = %storage_key,
                 "No data found for retrieval"
             );
-            
+
             Err(FiscusError::NotFound(format!(
                 "No secure data found for user {} and data type {}",
                 request.user_id, request.data_type

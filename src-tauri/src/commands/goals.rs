@@ -186,42 +186,42 @@ pub async fn update_goal(
 
     if let Some(name) = &request.name {
         Validator::validate_string(name, "name", 1, 100)?;
-        update_fields.push(format!("`name` = ?{param_index}"));
+        update_fields.push(format!("\"name\" = ?{param_index}"));
         params.push(Value::String(name.clone()));
         param_index += 1;
     }
 
     if let Some(description) = &request.description {
         Validator::validate_string(description, "description", 0, 500)?;
-        update_fields.push(format!("`description` = ?{param_index}"));
+        update_fields.push(format!("\"description\" = ?{param_index}"));
         params.push(Value::String(description.clone()));
         param_index += 1;
     }
 
     if let Some(target_amount) = request.target_amount {
         Validator::validate_amount(target_amount, false)?;
-        update_fields.push(format!("`target_amount` = ?{param_index}"));
+        update_fields.push(format!("\"target_amount\" = ?{param_index}"));
         params.push(Value::String(target_amount.to_string()));
         param_index += 1;
     }
 
     if let Some(current_amount) = request.current_amount {
         Validator::validate_amount(current_amount, false)?;
-        update_fields.push(format!("`current_amount` = ?{param_index}"));
+        update_fields.push(format!("\"current_amount\" = ?{param_index}"));
         params.push(Value::String(current_amount.to_string()));
         param_index += 1;
     }
 
     if let Some(target_date) = &request.target_date {
         let parsed_date = Validator::validate_date(target_date)?;
-        update_fields.push(format!("`target_date` = ?{param_index}"));
+        update_fields.push(format!("\"target_date\" = ?{param_index}"));
         params.push(Value::String(parsed_date.to_string()));
         param_index += 1;
     }
 
     if let Some(priority) = request.priority {
         let validated_priority = priority.clamp(1, 5);
-        update_fields.push(format!("`priority` = ?{param_index}"));
+        update_fields.push(format!("\"priority\" = ?{param_index}"));
         params.push(Value::Number(serde_json::Number::from(
             validated_priority as i64,
         )));
@@ -229,13 +229,13 @@ pub async fn update_goal(
     }
 
     if let Some(status) = &request.status {
-        update_fields.push(format!("`status` = ?{param_index}"));
+        update_fields.push(format!("\"status\" = ?{param_index}"));
         params.push(Value::String(status.to_string()));
         param_index += 1;
     }
 
     if let Some(category) = &request.category {
-        update_fields.push(format!("`category` = ?{param_index}"));
+        update_fields.push(format!("\"category\" = ?{param_index}"));
         params.push(Value::String(category.clone()));
         param_index += 1;
     }
@@ -245,7 +245,7 @@ pub async fn update_goal(
     }
 
     // Add updated_at timestamp
-    update_fields.push(format!("`updated_at` = ?{param_index}"));
+    update_fields.push(format!("\"updated_at\" = ?{param_index}"));
     params.push(Value::String(chrono::Utc::now().to_rfc3339()));
     param_index += 1;
 

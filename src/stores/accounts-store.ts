@@ -22,6 +22,8 @@ interface AccountsState {
 	summary: AccountSummaryResponse | null;
 	/** Loading state for account operations */
 	loading: boolean;
+	/** Loading state for summary refresh operations */
+	summaryLoading: boolean;
 	/** Error state */
 	error: FiscusApiError | null;
 	/** Whether accounts have been loaded */
@@ -43,6 +45,8 @@ interface AccountsActions {
 	deleteAccount: (accountId: string, userId: string) => Promise<boolean>;
 	/** Load account summary */
 	loadAccountSummary: (userId: string) => Promise<void>;
+	/** Refresh summary after account operations (debounced) */
+	refreshSummaryAfterOperation: (userId: string) => void;
 	/** Select an account */
 	selectAccount: (account: Account | null) => void;
 	/** Get account by ID */
@@ -59,12 +63,16 @@ interface AccountsActions {
 
 export type AccountsStore = AccountsState & AccountsActions;
 
+// Timeout reference for debouncing summary refreshes
+let summaryRefreshTimeout: NodeJS.Timeout | null = null;
+
 export const useAccountsStore = create<AccountsStore>()((set, get) => ({
 	// Initial state
 	accounts: [],
 	selectedAccount: null,
 	summary: null,
 	loading: false,
+	summaryLoading: false,
 	error: null,
 	initialized: false,
 
@@ -107,10 +115,8 @@ export const useAccountsStore = create<AccountsStore>()((set, get) => ({
 				error: null,
 			}));
 
-			// Refresh summary if it exists
-			if (get().summary) {
-				get().loadAccountSummary(request.user_id);
-			}
+			// Refresh summary after account creation (debounced)
+			get().refreshSummaryAfterOperation(request.user_id);
 
 			return newAccount;
 		} catch (error) {
@@ -153,10 +159,8 @@ export const useAccountsStore = create<AccountsStore>()((set, get) => ({
 				error: null,
 			}));
 
-			// Refresh summary if it exists
-			if (get().summary) {
-				get().loadAccountSummary(userId);
-			}
+			// Refresh summary after account update (debounced)
+			get().refreshSummaryAfterOperation(userId);
 
 			return updatedAccount;
 		} catch (error) {
@@ -195,12 +199,16 @@ export const useAccountsStore = create<AccountsStore>()((set, get) => ({
 					error: null,
 				}));
 
-				// Refresh summary if it exists
-				if (get().summary) {
-					get().loadAccountSummary(userId);
-				}
+				// Refresh summary after account deletion (debounced)
+				get().refreshSummaryAfterOperation(userId);
 			} else {
-				set({ loading: false });
+				set({
+					loading: false,
+					error: new FiscusApiError(
+						"Failed to delete account",
+						"OPERATION_NOT_ALLOWED",
+					),
+				});
 			}
 
 			return success;
@@ -238,6 +246,34 @@ export const useAccountsStore = create<AccountsStore>()((set, get) => ({
 		}
 	},
 
+	refreshSummaryAfterOperation: (userId: string) => {
+		// Clear any existing timeout to debounce rapid successive calls
+		if (summaryRefreshTimeout) {
+			clearTimeout(summaryRefreshTimeout);
+		}
+
+		// Only refresh if summary exists (has been loaded before)
+		if (!get().summary) return;
+
+		// Debounce the refresh to prevent race conditions
+		summaryRefreshTimeout = setTimeout(async () => {
+			set({ summaryLoading: true });
+			try {
+				await get().loadAccountSummary(userId);
+			} catch (error) {
+				// Log the error but don't set it in the store as this is a background operation
+				// and shouldn't affect the main operation's success
+				console.warn(
+					"Failed to refresh summary after account operation:",
+					error,
+				);
+			} finally {
+				set({ summaryLoading: false });
+				summaryRefreshTimeout = null;
+			}
+		}, 300); // 300ms debounce delay
+	},
+
 	selectAccount: (account: Account | null) => {
 		set({ selectedAccount: account });
 	},
@@ -260,11 +296,18 @@ export const useAccountsStore = create<AccountsStore>()((set, get) => ({
 	},
 
 	reset: () => {
+		// Clear any pending summary refresh timeout
+		if (summaryRefreshTimeout) {
+			clearTimeout(summaryRefreshTimeout);
+			summaryRefreshTimeout = null;
+		}
+
 		set({
 			accounts: [],
 			selectedAccount: null,
 			summary: null,
 			loading: false,
+			summaryLoading: false,
 			error: null,
 			initialized: false,
 		});
@@ -304,8 +347,8 @@ export const useSelectedAccount = () => {
 };
 
 export const useAccountSummary = () => {
-	const { summary, loadAccountSummary } = useAccountsStore();
-	return { summary, loadAccountSummary };
+	const { summary, summaryLoading, loadAccountSummary } = useAccountsStore();
+	return { summary, summaryLoading, loadAccountSummary };
 };
 
 /**

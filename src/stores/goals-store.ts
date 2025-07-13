@@ -114,7 +114,7 @@ export const useGoalsStore = create<GoalsStore>()((set, get) => ({
 
 			// Refresh progress summary if it exists
 			if (get().progressSummary) {
-				get().loadGoalProgressSummary(request.user_id);
+				await get().loadGoalProgressSummary(request.user_id);
 			}
 
 			return newGoal;
@@ -257,15 +257,19 @@ export const useGoalsStore = create<GoalsStore>()((set, get) => ({
 	},
 
 	loadGoalProgressSummary: async (userId: string): Promise<void> => {
+		set({ loading: true, error: null });
+
 		try {
 			const progressSummary = await apiClient.getGoalProgressSummary(userId);
 
 			set({
 				progressSummary,
+				loading: false,
 				error: null,
 			});
 		} catch (error) {
 			set({
+				loading: false,
 				error:
 					error instanceof FiscusApiError
 						? error

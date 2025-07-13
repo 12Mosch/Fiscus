@@ -8,6 +8,7 @@ use crate::logging::DatabaseLogger;
 
 // Sub-modules
 pub mod encrypted;
+pub mod secure_storage_repository;
 
 /// Database connection type alias
 pub type Database = String;

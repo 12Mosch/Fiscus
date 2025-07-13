@@ -1,98 +1,49 @@
 use chrono::Utc;
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{info, instrument};
 
 use crate::{
+    database::secure_storage_repository::SecureStorageRepository,
     dto::{
         SecureDeleteRequest, SecureDeleteResponse, SecureRetrieveRequest, SecureRetrieveResponse,
         SecureStoreRequest, SecureStoreResponse,
     },
-    error::{FiscusError, FiscusResult, SecurityValidator, Validator},
+    error::{FiscusError, FiscusResult},
+    services::get_secure_storage_service,
 };
 
-/// In-memory secure storage for encrypted data
-/// In production, this should be replaced with a proper database or secure file storage
-static SECURE_STORAGE: Mutex<Option<Arc<Mutex<HashMap<String, StoredData>>>>> = Mutex::new(None);
-
-#[derive(Debug, Clone)]
-struct StoredData {
-    encrypted_data: String,
-    nonce: String,
-    algorithm: crate::encryption::EncryptionAlgorithm,
-    key_id: String,
-    stored_at: chrono::DateTime<Utc>,
-}
-
-/// Initialize the secure storage
-fn get_secure_storage() -> Arc<Mutex<HashMap<String, StoredData>>> {
-    let mut storage_guard = SECURE_STORAGE.lock().unwrap();
-    if storage_guard.is_none() {
-        *storage_guard = Some(Arc::new(Mutex::new(HashMap::new())));
-    }
-    storage_guard.as_ref().unwrap().clone()
-}
-
-/// Generate a storage key for the given user and data type
-fn generate_storage_key(user_id: &str, data_type: &str) -> String {
-    format!("secure_{}_{}", data_type, user_id)
+/// Get database connection for secure storage operations
+/// In production, this should use a proper connection pool
+fn get_database() -> String {
+    // TODO: Replace with actual database connection
+    // For now, using the default database name from tauri.conf.json
+    "sqlite:fiscus.db".to_string()
 }
 
 /// Store encrypted data securely
 #[tauri::command]
 #[instrument(skip(request), fields(user_id = %request.user_id, data_type = %request.data_type))]
 pub async fn secure_store(request: SecureStoreRequest) -> FiscusResult<SecureStoreResponse> {
-    // Validate input
-    Validator::validate_uuid(&request.user_id, "user_id")?;
-    Validator::validate_string(&request.data_type, "data_type", 1, 100)?;
+    // Create repository instance
+    let db = get_database();
+    let repository = SecureStorageRepository::new(db);
 
-    if request.encrypted_data.is_empty() {
-        return Err(FiscusError::InvalidInput(
-            "Encrypted data cannot be empty".to_string(),
-        ));
-    }
-
-    if request.nonce.is_empty() {
-        return Err(FiscusError::InvalidInput(
-            "Nonce cannot be empty".to_string(),
-        ));
-    }
-
-    if request.key_id.is_empty() {
-        return Err(FiscusError::InvalidInput(
-            "Key ID cannot be empty".to_string(),
-        ));
-    }
-
-    let storage_key = generate_storage_key(&request.user_id, &request.data_type);
-    let stored_at = Utc::now();
-
-    let stored_data = StoredData {
-        encrypted_data: request.encrypted_data,
-        nonce: request.nonce,
-        algorithm: request.algorithm,
-        key_id: request.key_id,
-        stored_at,
-    };
-
-    // Store the data
-    let storage = get_secure_storage();
-    {
-        let mut storage_map = storage.lock().unwrap();
-        storage_map.insert(storage_key.clone(), stored_data);
-    }
-
-    info!(
-        user_id = %request.user_id,
-        data_type = %request.data_type,
-        storage_key = %storage_key,
-        "Data stored securely"
-    );
+    // Store the data using the repository
+    let record = repository
+        .store(
+            &request.user_id,
+            &request.data_type,
+            &request.encrypted_data,
+            &request.nonce,
+            request.algorithm,
+            &request.key_id,
+            None, // No expiration by default
+        )
+        .await?;
 
     Ok(SecureStoreResponse {
         stored: true,
-        storage_key,
-        stored_at,
+        storage_key: record.storage_key,
+        stored_at: record.stored_at,
     })
 }
 
@@ -102,49 +53,26 @@ pub async fn secure_store(request: SecureStoreRequest) -> FiscusResult<SecureSto
 pub async fn secure_retrieve(
     request: SecureRetrieveRequest,
 ) -> FiscusResult<SecureRetrieveResponse> {
-    // Validate input
-    Validator::validate_uuid(&request.user_id, "user_id")?;
-    Validator::validate_string(&request.data_type, "data_type", 1, 100)?;
+    // Create repository instance
+    let db = get_database();
+    let repository = SecureStorageRepository::new(db);
 
-    let storage_key = generate_storage_key(&request.user_id, &request.data_type);
-
-    // Retrieve the data
-    let storage = get_secure_storage();
-    let stored_data = {
-        let storage_map = storage.lock().unwrap();
-        storage_map.get(&storage_key).cloned()
-    };
-
-    match stored_data {
-        Some(data) => {
-            debug!(
-                user_id = %request.user_id,
-                data_type = %request.data_type,
-                storage_key = %storage_key,
-                "Data retrieved securely"
-            );
-
-            Ok(SecureRetrieveResponse {
-                encrypted_data: data.encrypted_data,
-                nonce: data.nonce,
-                algorithm: data.algorithm,
-                key_id: data.key_id,
-                stored_at: data.stored_at,
-            })
-        }
-        None => {
-            warn!(
-                user_id = %request.user_id,
-                data_type = %request.data_type,
-                storage_key = %storage_key,
-                "No data found for retrieval"
-            );
-
-            Err(FiscusError::NotFound(format!(
-                "No secure data found for user {} and data type {}",
-                request.user_id, request.data_type
-            )))
-        }
+    // Retrieve the data using the repository
+    match repository
+        .retrieve(&request.user_id, &request.data_type)
+        .await?
+    {
+        Some(record) => Ok(SecureRetrieveResponse {
+            encrypted_data: record.encrypted_data,
+            nonce: record.nonce,
+            algorithm: record.algorithm,
+            key_id: record.key_id,
+            stored_at: record.stored_at,
+        }),
+        None => Err(FiscusError::NotFound(format!(
+            "No secure data found for user {} and data type {}",
+            request.user_id, request.data_type
+        ))),
     }
 }
 
@@ -152,38 +80,66 @@ pub async fn secure_retrieve(
 #[tauri::command]
 #[instrument(skip(request), fields(user_id = %request.user_id, data_type = %request.data_type))]
 pub async fn secure_delete(request: SecureDeleteRequest) -> FiscusResult<SecureDeleteResponse> {
-    // Validate input
-    Validator::validate_uuid(&request.user_id, "user_id")?;
-    Validator::validate_string(&request.data_type, "data_type", 1, 100)?;
+    // Create repository instance
+    let db = get_database();
+    let repository = SecureStorageRepository::new(db);
 
-    let storage_key = generate_storage_key(&request.user_id, &request.data_type);
+    // Delete the data using the repository
+    let was_deleted = repository
+        .delete(&request.user_id, &request.data_type)
+        .await?;
     let deleted_at = Utc::now();
 
-    // Delete the data
-    let storage = get_secure_storage();
-    let was_present = {
-        let mut storage_map = storage.lock().unwrap();
-        storage_map.remove(&storage_key).is_some()
-    };
-
-    if was_present {
-        info!(
-            user_id = %request.user_id,
-            data_type = %request.data_type,
-            storage_key = %storage_key,
-            "Data deleted securely"
-        );
-    } else {
-        warn!(
-            user_id = %request.user_id,
-            data_type = %request.data_type,
-            storage_key = %storage_key,
-            "No data found to delete"
-        );
-    }
-
     Ok(SecureDeleteResponse {
-        deleted: was_present,
+        deleted: was_deleted,
         deleted_at,
     })
+}
+
+/// Clean up expired secure storage entries
+#[tauri::command]
+#[instrument]
+pub async fn secure_cleanup_expired() -> FiscusResult<u64> {
+    // Try to use the service first, fall back to direct repository access
+    match get_secure_storage_service().await {
+        Ok(service_arc) => {
+            let service = service_arc.lock().await;
+            let report = service.manual_cleanup().await?;
+            Ok(report.deleted_count)
+        }
+        Err(_) => {
+            // Fallback to direct repository access
+            let db = get_database();
+            let repository = SecureStorageRepository::new(db);
+            let deleted_count = repository.cleanup_expired().await?;
+
+            info!(
+                deleted_count = deleted_count,
+                "Cleaned up expired secure storage entries (fallback mode)"
+            );
+
+            Ok(deleted_count)
+        }
+    }
+}
+
+/// Get secure storage statistics
+#[tauri::command]
+#[instrument(skip(user_id))]
+pub async fn secure_get_statistics(
+    user_id: Option<String>,
+) -> FiscusResult<Vec<std::collections::HashMap<String, serde_json::Value>>> {
+    // Try to use the service first, fall back to direct repository access
+    match get_secure_storage_service().await {
+        Ok(service_arc) => {
+            let service = service_arc.lock().await;
+            service.get_statistics(user_id.as_deref()).await
+        }
+        Err(_) => {
+            // Fallback to direct repository access
+            let db = get_database();
+            let repository = SecureStorageRepository::new(db);
+            repository.get_storage_stats(user_id.as_deref()).await
+        }
+    }
 }

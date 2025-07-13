@@ -9,6 +9,7 @@ pub mod error;
 mod logging;
 mod models;
 pub mod security;
+mod services;
 
 #[cfg(test)]
 mod test_utils;
@@ -42,12 +43,20 @@ pub fn run() {
     }
 
     // Define database migrations for the personal finance application
-    let migrations = vec![Migration {
-        version: 1,
-        description: "create_initial_tables",
-        sql: include_str!("../migrations/001_initial_schema.sql"),
-        kind: MigrationKind::Up,
-    }];
+    let migrations = vec![
+        Migration {
+            version: 1,
+            description: "create_initial_tables",
+            sql: include_str!("../migrations/001_initial_schema.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 2,
+            description: "create_secure_storage",
+            sql: include_str!("../migrations/002_secure_storage.sql"),
+            kind: MigrationKind::Up,
+        },
+    ];
 
     tracing::info!(
         "Configuring Tauri application with {} migrations",
@@ -126,6 +135,8 @@ pub fn run() {
             commands::secure_store,
             commands::secure_retrieve,
             commands::secure_delete,
+            commands::secure_cleanup_expired,
+            commands::secure_get_statistics,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

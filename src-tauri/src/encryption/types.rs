@@ -35,6 +35,18 @@ pub enum EncryptionAlgorithm {
     X25519,
 }
 
+impl std::fmt::Display for EncryptionAlgorithm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EncryptionAlgorithm::Aes256Gcm => write!(f, "aes256_gcm"),
+            EncryptionAlgorithm::ChaCha20Poly1305 => write!(f, "chacha20_poly1305"),
+            EncryptionAlgorithm::Rsa4096 => write!(f, "rsa4096"),
+            EncryptionAlgorithm::Ed25519 => write!(f, "ed25519"),
+            EncryptionAlgorithm::X25519 => write!(f, "x25519"),
+        }
+    }
+}
+
 /// Types of encryption keys
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

@@ -142,7 +142,7 @@ impl EncryptedDatabaseUtils {
             warn!(
                 "DEVELOPMENT MODE: Parameter encryption not fully implemented. Use encrypt_record() for structured data operations."
             );
-            return Ok(params);
+            Ok(params)
         }
     }
 

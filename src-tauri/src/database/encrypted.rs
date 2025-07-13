@@ -21,7 +21,8 @@ const ENCRYPTED_FIELDS: &[(&str, &[&str])] = &[
     ("accounts", &["balance", "account_number"]),
     ("users", &["email"]),
     ("goals", &["target_amount", "current_amount", "description"]),
-    ("budgets", &["amount", "spent_amount"]),
+    ("budgets", &["allocated_amount", "spent_amount"]),
+    ("transfers", &["amount", "description"]),
 ];
 
 /// Encrypted database utilities

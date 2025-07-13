@@ -4,7 +4,7 @@ use tauri::State;
 use uuid::Uuid;
 
 use crate::{
-    database::{Database, DatabaseUtils},
+    database::{encrypted::EncryptedDatabaseUtils, Database, DatabaseUtils},
     dto::{AccountFilters, AccountSummaryResponse, CreateAccountRequest, UpdateAccountRequest},
     error::{FiscusError, SecurityValidator, Validator},
     models::Account,
@@ -51,24 +51,47 @@ pub async fn create_account(
         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
     "#;
 
-    let params = vec![
-        Value::String(account_id.clone()),
-        Value::String(request.user_id.clone()),
-        Value::String(request.account_type_id.clone()),
-        Value::String(request.name.clone()),
-        Value::String(initial_balance.to_string()),
-        Value::String(request.currency.clone()),
-        request
-            .account_number
-            .as_ref()
-            .map(|n| Value::String(n.clone()))
-            .unwrap_or(Value::Null),
-        Value::Bool(true),
-        Value::String(now.clone()),
-        Value::String(now),
+    // Use encrypted parameter mapping for sensitive fields
+    let params_with_mapping = vec![
+        ("id".to_string(), Value::String(account_id.clone())),
+        (
+            "user_id".to_string(),
+            Value::String(request.user_id.clone()),
+        ),
+        (
+            "account_type_id".to_string(),
+            Value::String(request.account_type_id.clone()),
+        ),
+        ("name".to_string(), Value::String(request.name.clone())),
+        (
+            "balance".to_string(),
+            Value::String(initial_balance.to_string()),
+        ),
+        (
+            "currency".to_string(),
+            Value::String(request.currency.clone()),
+        ),
+        (
+            "account_number".to_string(),
+            request
+                .account_number
+                .as_ref()
+                .map(|n| Value::String(n.clone()))
+                .unwrap_or(Value::Null),
+        ),
+        ("is_active".to_string(), Value::Bool(true)),
+        ("created_at".to_string(), Value::String(now.clone())),
+        ("updated_at".to_string(), Value::String(now)),
     ];
 
-    DatabaseUtils::execute_non_query(&db, insert_query, params).await?;
+    let encrypted_params = EncryptedDatabaseUtils::encrypt_params_with_mapping(
+        params_with_mapping,
+        &request.user_id,
+        "accounts",
+    )
+    .await?;
+
+    DatabaseUtils::execute_non_query(&db, insert_query, encrypted_params).await?;
 
     // Return the created account
     get_account_by_id(account_id, db).await
@@ -86,7 +109,7 @@ pub async fn get_accounts(
 
     // Build query with filters
     let mut filter_map = HashMap::new();
-    filter_map.insert("user_id".to_string(), filters.user_id);
+    filter_map.insert("user_id".to_string(), filters.user_id.clone());
 
     if let Some(account_type_id) = filters.account_type_id {
         Validator::validate_uuid(&account_type_id, "account_type_id")?;
@@ -123,8 +146,15 @@ pub async fn get_accounts(
 
     let final_query = format!("{base_query} {where_clause} {order_clause} {limit_clause}");
 
-    let accounts: Vec<Account> =
-        DatabaseUtils::execute_query(&db, &final_query, where_params).await?;
+    // Use encrypted query to properly decrypt sensitive fields
+    let accounts: Vec<Account> = EncryptedDatabaseUtils::execute_encrypted_query(
+        &db,
+        &final_query,
+        where_params,
+        &filters.user_id,
+        "accounts",
+    )
+    .await?;
 
     Ok(accounts)
 }
@@ -137,18 +167,44 @@ pub async fn get_account_by_id(
 ) -> Result<Account, FiscusError> {
     Validator::validate_uuid(&account_id, "account_id")?;
 
+    // First, get the user_id for this account (this field is not encrypted)
+    let user_query = "SELECT user_id FROM accounts WHERE id = ?1";
+    let user_result: Option<HashMap<String, serde_json::Value>> =
+        DatabaseUtils::execute_query_single(
+            &db,
+            user_query,
+            vec![Value::String(account_id.clone())],
+        )
+        .await?;
+
+    let user_id = user_result
+        .and_then(|row| {
+            row.get("user_id")
+                .and_then(|v| v.as_str().map(|s| s.to_string()))
+        })
+        .ok_or_else(|| FiscusError::NotFound("Account not found".to_string()))?;
+
     let query = r#"
-        SELECT id, user_id, account_type_id, name, balance, currency, 
+        SELECT id, user_id, account_type_id, name, balance, currency,
                account_number, is_active, created_at, updated_at
-        FROM accounts 
+        FROM accounts
         WHERE id = ?1
     "#;
 
-    let account: Option<Account> =
-        DatabaseUtils::execute_query_single(&db, query, vec![Value::String(account_id.clone())])
-            .await?;
+    // Use encrypted query to properly decrypt sensitive fields
+    let accounts: Vec<Account> = EncryptedDatabaseUtils::execute_encrypted_query(
+        &db,
+        query,
+        vec![Value::String(account_id.clone())],
+        &user_id,
+        "accounts",
+    )
+    .await?;
 
-    account.ok_or_else(|| FiscusError::NotFound("Account not found".to_string()))
+    accounts
+        .into_iter()
+        .next()
+        .ok_or_else(|| FiscusError::NotFound("Account not found".to_string()))
 }
 
 /// Update an account
@@ -166,34 +222,37 @@ pub async fn update_account(
     // Validate ownership
     DatabaseUtils::validate_account_ownership(&db, &account_id, &user_id).await?;
 
-    // Build update query dynamically
+    // Build update query dynamically with encrypted parameter mapping
     let mut update_fields = Vec::new();
-    let mut params = Vec::new();
+    let mut params_with_mapping = Vec::new();
     let mut param_index = 1;
 
     if let Some(name) = &request.name {
         Validator::validate_string(name, "name", 1, 100)?;
         update_fields.push(format!("`name` = ?{param_index}"));
-        params.push(Value::String(name.clone()));
+        params_with_mapping.push(("name".to_string(), Value::String(name.clone())));
         param_index += 1;
     }
 
     if let Some(balance) = request.balance {
         Validator::validate_amount(balance, true)?;
         update_fields.push(format!("`balance` = ?{param_index}"));
-        params.push(Value::String(balance.to_string()));
+        params_with_mapping.push(("balance".to_string(), Value::String(balance.to_string())));
         param_index += 1;
     }
 
     if let Some(account_number) = &request.account_number {
         update_fields.push(format!("`account_number` = ?{param_index}"));
-        params.push(Value::String(account_number.clone()));
+        params_with_mapping.push((
+            "account_number".to_string(),
+            Value::String(account_number.clone()),
+        ));
         param_index += 1;
     }
 
     if let Some(is_active) = request.is_active {
         update_fields.push(format!("`is_active` = ?{param_index}"));
-        params.push(Value::Bool(is_active));
+        params_with_mapping.push(("is_active".to_string(), Value::Bool(is_active)));
         param_index += 1;
     }
 
@@ -203,11 +262,14 @@ pub async fn update_account(
 
     // Add updated_at timestamp
     update_fields.push(format!("`updated_at` = ?{param_index}"));
-    params.push(Value::String(chrono::Utc::now().to_rfc3339()));
+    params_with_mapping.push((
+        "updated_at".to_string(),
+        Value::String(chrono::Utc::now().to_rfc3339()),
+    ));
     param_index += 1;
 
     // Add account_id for WHERE clause
-    params.push(Value::String(account_id.clone()));
+    params_with_mapping.push(("id".to_string(), Value::String(account_id.clone())));
 
     let update_query = format!(
         "UPDATE accounts SET {} WHERE id = ?{}",
@@ -215,7 +277,16 @@ pub async fn update_account(
         param_index
     );
 
-    let affected_rows = DatabaseUtils::execute_non_query(&db, &update_query, params).await?;
+    // Encrypt sensitive parameters before update
+    let encrypted_params = EncryptedDatabaseUtils::encrypt_params_with_mapping(
+        params_with_mapping,
+        &user_id,
+        "accounts",
+    )
+    .await?;
+
+    let affected_rows =
+        DatabaseUtils::execute_non_query(&db, &update_query, encrypted_params).await?;
 
     if affected_rows == 0 {
         return Err(FiscusError::NotFound("Account not found".to_string()));
@@ -258,16 +329,27 @@ pub async fn delete_account(
     if transaction_count > 0 {
         // Soft delete - set is_active to false
         let update_query = "UPDATE accounts SET is_active = ?1, updated_at = ?2 WHERE id = ?3";
-        let params = vec![
-            Value::Bool(false),
-            Value::String(chrono::Utc::now().to_rfc3339()),
-            Value::String(account_id),
+        let params_with_mapping = vec![
+            ("is_active".to_string(), Value::Bool(false)),
+            (
+                "updated_at".to_string(),
+                Value::String(chrono::Utc::now().to_rfc3339()),
+            ),
+            ("id".to_string(), Value::String(account_id)),
         ];
 
-        let affected_rows = DatabaseUtils::execute_non_query(&db, update_query, params).await?;
+        let encrypted_params = EncryptedDatabaseUtils::encrypt_params_with_mapping(
+            params_with_mapping,
+            &user_id,
+            "accounts",
+        )
+        .await?;
+
+        let affected_rows =
+            DatabaseUtils::execute_non_query(&db, update_query, encrypted_params).await?;
         Ok(affected_rows > 0)
     } else {
-        // Hard delete if no transactions
+        // Hard delete if no transactions - no encryption needed for DELETE
         let delete_query = "DELETE FROM accounts WHERE id = ?1";
         let params = vec![Value::String(account_id)];
 
@@ -286,38 +368,49 @@ pub async fn get_account_summary(
     Validator::validate_uuid(&user_id, "user_id")?;
     DatabaseUtils::validate_user_exists(&db, &user_id).await?;
 
-    let summary_query = r#"
-        SELECT 
-            COALESCE(SUM(CASE WHEN at.is_asset = 1 THEN a.balance ELSE 0 END), 0) as total_assets,
-            COALESCE(SUM(CASE WHEN at.is_asset = 0 THEN ABS(a.balance) ELSE 0 END), 0) as total_liabilities,
-            COUNT(*) as account_count
+    // For aggregation on encrypted fields, we need to fetch all accounts first and decrypt them
+    let accounts_query = r#"
+        SELECT a.id, a.user_id, a.account_type_id, a.name, a.balance, a.currency,
+               a.account_number, a.is_active, a.created_at, a.updated_at, at.is_asset
         FROM accounts a
         JOIN account_types at ON a.account_type_id = at.id
         WHERE a.user_id = ?1 AND a.is_active = 1
     "#;
 
-    let summary: Option<HashMap<String, serde_json::Value>> =
-        DatabaseUtils::execute_query_single(&db, summary_query, vec![Value::String(user_id)])
-            .await?;
+    // Use encrypted query to properly decrypt balance fields
+    let accounts_with_types: Vec<HashMap<String, serde_json::Value>> =
+        EncryptedDatabaseUtils::execute_encrypted_query(
+            &db,
+            accounts_query,
+            vec![Value::String(user_id.clone())],
+            &user_id,
+            "accounts",
+        )
+        .await?;
 
-    let summary_data = summary.unwrap_or_default();
+    // Calculate summary from decrypted account data
+    let mut total_assets = rust_decimal::Decimal::ZERO;
+    let mut total_liabilities = rust_decimal::Decimal::ZERO;
+    let account_count = accounts_with_types.len() as i32;
 
-    let total_assets = summary_data
-        .get("total_assets")
-        .and_then(|v| v.as_str())
-        .and_then(|s| s.parse::<rust_decimal::Decimal>().ok())
-        .unwrap_or(rust_decimal::Decimal::ZERO);
+    for account in accounts_with_types {
+        let balance = account
+            .get("balance")
+            .and_then(|v| v.as_str())
+            .and_then(|s| s.parse::<rust_decimal::Decimal>().ok())
+            .unwrap_or(rust_decimal::Decimal::ZERO);
 
-    let total_liabilities = summary_data
-        .get("total_liabilities")
-        .and_then(|v| v.as_str())
-        .and_then(|s| s.parse::<rust_decimal::Decimal>().ok())
-        .unwrap_or(rust_decimal::Decimal::ZERO);
+        let is_asset = account
+            .get("is_asset")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
 
-    let account_count = summary_data
-        .get("account_count")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(0) as i32;
+        if is_asset {
+            total_assets += balance;
+        } else {
+            total_liabilities += balance.abs();
+        }
+    }
 
     let net_worth = total_assets - total_liabilities;
 

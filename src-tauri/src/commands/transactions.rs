@@ -4,7 +4,7 @@ use tauri::State;
 use uuid::Uuid;
 
 use crate::{
-    database::{Database, DatabaseUtils},
+    database::{encrypted::EncryptedDatabaseUtils, Database, DatabaseUtils},
     dto::{
         CreateTransactionRequest, CreateTransferRequest, TransactionFilters,
         TransactionSummaryResponse, UpdateTransactionRequest,
@@ -58,44 +58,88 @@ pub async fn create_transaction(
             .as_ref()
             .map(|tags| serde_json::to_string(tags).unwrap_or_else(|_| "[]".to_string()));
 
-        let params = vec![
-            Value::String(transaction_id.clone()),
-            Value::String(request.user_id.clone()),
-            Value::String(request.account_id.clone()),
-            request
-                .category_id
-                .as_ref()
-                .map(|id| Value::String(id.clone()))
-                .unwrap_or(Value::Null),
-            Value::String(request.amount.to_string()),
-            Value::String(request.description.clone()),
-            request
-                .notes
-                .as_ref()
-                .map(|n| Value::String(n.clone()))
-                .unwrap_or(Value::Null),
-            Value::String(transaction_date.to_rfc3339()),
-            Value::String(request.transaction_type.to_string()),
-            Value::String(TransactionStatus::Completed.to_string()),
-            request
-                .reference_number
-                .as_ref()
-                .map(|r| Value::String(r.clone()))
-                .unwrap_or(Value::Null),
-            request
-                .payee
-                .as_ref()
-                .map(|p| Value::String(p.clone()))
-                .unwrap_or(Value::Null),
-            tags_json
-                .as_ref()
-                .map(|t| Value::String(t.clone()))
-                .unwrap_or(Value::Null),
-            Value::String(now.clone()),
-            Value::String(now),
+        // Use encrypted parameter mapping for sensitive fields
+        let params_with_mapping = vec![
+            ("id".to_string(), Value::String(transaction_id.clone())),
+            (
+                "user_id".to_string(),
+                Value::String(request.user_id.clone()),
+            ),
+            (
+                "account_id".to_string(),
+                Value::String(request.account_id.clone()),
+            ),
+            (
+                "category_id".to_string(),
+                request
+                    .category_id
+                    .as_ref()
+                    .map(|id| Value::String(id.clone()))
+                    .unwrap_or(Value::Null),
+            ),
+            (
+                "amount".to_string(),
+                Value::String(request.amount.to_string()),
+            ),
+            (
+                "description".to_string(),
+                Value::String(request.description.clone()),
+            ),
+            (
+                "notes".to_string(),
+                request
+                    .notes
+                    .as_ref()
+                    .map(|n| Value::String(n.clone()))
+                    .unwrap_or(Value::Null),
+            ),
+            (
+                "transaction_date".to_string(),
+                Value::String(transaction_date.to_rfc3339()),
+            ),
+            (
+                "transaction_type".to_string(),
+                Value::String(request.transaction_type.to_string()),
+            ),
+            (
+                "status".to_string(),
+                Value::String(TransactionStatus::Completed.to_string()),
+            ),
+            (
+                "reference_number".to_string(),
+                request
+                    .reference_number
+                    .as_ref()
+                    .map(|r| Value::String(r.clone()))
+                    .unwrap_or(Value::Null),
+            ),
+            (
+                "payee".to_string(),
+                request
+                    .payee
+                    .as_ref()
+                    .map(|p| Value::String(p.clone()))
+                    .unwrap_or(Value::Null),
+            ),
+            (
+                "tags".to_string(),
+                tags_json
+                    .as_ref()
+                    .map(|t| Value::String(t.clone()))
+                    .unwrap_or(Value::Null),
+            ),
+            ("created_at".to_string(), Value::String(now.clone())),
+            ("updated_at".to_string(), Value::String(now)),
         ];
 
-        DatabaseUtils::execute_non_query(&db, insert_query, params).await?;
+        let encrypted_params = EncryptedDatabaseUtils::encrypt_params_with_mapping(
+            params_with_mapping,
+            &request.user_id,
+            "transactions",
+        )
+        .await?;
+
+        DatabaseUtils::execute_non_query(&db, insert_query, encrypted_params).await?;
 
         // Update account balance based on transaction type
         let current_balance = DatabaseUtils::get_account_balance(&db, &request.account_id).await?;
@@ -128,7 +172,7 @@ pub async fn get_transactions(
 
     // Build filter map
     let mut filter_map = HashMap::new();
-    filter_map.insert("user_id".to_string(), filters.user_id);
+    filter_map.insert("user_id".to_string(), filters.user_id.clone());
 
     if let Some(account_id) = filters.account_id {
         Validator::validate_uuid(&account_id, "account_id")?;
@@ -223,10 +267,48 @@ pub async fn get_transactions(
 
     let final_query = format!("{base_query} {where_clause} {order_clause} {limit_clause}");
 
-    let transactions: Vec<Transaction> =
-        DatabaseUtils::execute_query(&db, &final_query, where_params).await?;
+    // Use encrypted query to properly decrypt sensitive fields
+    let transactions: Vec<Transaction> = EncryptedDatabaseUtils::execute_encrypted_query(
+        &db,
+        &final_query,
+        where_params,
+        &filters.user_id,
+        "transactions",
+    )
+    .await?;
 
     Ok(transactions)
+}
+
+/// Get a single transaction by ID (internal helper with user_id for encryption)
+async fn get_transaction_by_id_encrypted(
+    transaction_id: String,
+    user_id: &str,
+    db: &Database,
+) -> Result<Transaction, FiscusError> {
+    Validator::validate_uuid(&transaction_id, "transaction_id")?;
+
+    let query = r#"
+        SELECT id, user_id, account_id, category_id, amount, description, notes,
+               transaction_date, transaction_type, status, reference_number, payee, tags,
+               created_at, updated_at
+        FROM transactions
+        WHERE id = ?1
+    "#;
+
+    let transactions: Vec<Transaction> = EncryptedDatabaseUtils::execute_encrypted_query(
+        db,
+        query,
+        vec![Value::String(transaction_id.clone())],
+        user_id,
+        "transactions",
+    )
+    .await?;
+
+    transactions
+        .into_iter()
+        .next()
+        .ok_or_else(|| FiscusError::NotFound("Transaction not found".to_string()))
 }
 
 /// Get a single transaction by ID
@@ -237,22 +319,25 @@ pub async fn get_transaction_by_id(
 ) -> Result<Transaction, FiscusError> {
     Validator::validate_uuid(&transaction_id, "transaction_id")?;
 
-    let query = r#"
-        SELECT id, user_id, account_id, category_id, amount, description, notes,
-               transaction_date, transaction_type, status, reference_number, payee, tags,
-               created_at, updated_at
-        FROM transactions 
-        WHERE id = ?1
-    "#;
+    // First, get the user_id for this transaction (this field is not encrypted)
+    let user_query = "SELECT user_id FROM transactions WHERE id = ?1";
+    let user_result: Option<HashMap<String, serde_json::Value>> =
+        DatabaseUtils::execute_query_single(
+            &db,
+            user_query,
+            vec![Value::String(transaction_id.clone())],
+        )
+        .await?;
 
-    let transaction: Option<Transaction> = DatabaseUtils::execute_query_single(
-        &db,
-        query,
-        vec![Value::String(transaction_id.clone())],
-    )
-    .await?;
+    let user_id = user_result
+        .and_then(|row| {
+            row.get("user_id")
+                .and_then(|v| v.as_str().map(|s| s.to_string()))
+        })
+        .ok_or_else(|| FiscusError::NotFound("Transaction not found".to_string()))?;
 
-    transaction.ok_or_else(|| FiscusError::NotFound("Transaction not found".to_string()))
+    // Now get the full transaction with decryption
+    get_transaction_by_id_encrypted(transaction_id, &user_id, &db).await
 }
 
 /// Update a transaction
@@ -276,16 +361,19 @@ pub async fn update_transaction(
         ));
     }
 
-    // Build update query dynamically
+    // Build update query dynamically with encrypted parameter mapping
     let mut update_fields = Vec::new();
-    let mut params = Vec::new();
+    let mut params_with_mapping = Vec::new();
     let mut param_index = 1;
 
     if let Some(category_id) = &request.category_id {
         Validator::validate_uuid(category_id, "category_id")?;
         DatabaseUtils::validate_category_ownership(&db, category_id, &user_id).await?;
         update_fields.push(format!("`category_id` = ?{param_index}"));
-        params.push(Value::String(category_id.clone()));
+        params_with_mapping.push((
+            "category_id".to_string(),
+            Value::String(category_id.clone()),
+        ));
         param_index += 1;
     }
 
@@ -294,7 +382,7 @@ pub async fn update_transaction(
     if let Some(amount) = request.amount {
         Validator::validate_amount(amount, true)?;
         update_fields.push(format!("`amount` = ?{param_index}"));
-        params.push(Value::String(amount.to_string()));
+        params_with_mapping.push(("amount".to_string(), Value::String(amount.to_string())));
         param_index += 1;
         amount_changed = true;
         new_amount = amount;
@@ -303,51 +391,63 @@ pub async fn update_transaction(
     if let Some(description) = &request.description {
         Validator::validate_string(description, "description", 1, 255)?;
         update_fields.push(format!("`description` = ?{param_index}"));
-        params.push(Value::String(description.clone()));
+        params_with_mapping.push((
+            "description".to_string(),
+            Value::String(description.clone()),
+        ));
         param_index += 1;
     }
 
     if let Some(notes) = &request.notes {
         update_fields.push(format!("`notes` = ?{param_index}"));
-        params.push(Value::String(notes.clone()));
+        params_with_mapping.push(("notes".to_string(), Value::String(notes.clone())));
         param_index += 1;
     }
 
     if let Some(transaction_date) = &request.transaction_date {
         let parsed_date = Validator::validate_datetime(transaction_date)?;
         update_fields.push(format!("`transaction_date` = ?{param_index}"));
-        params.push(Value::String(parsed_date.to_rfc3339()));
+        params_with_mapping.push((
+            "transaction_date".to_string(),
+            Value::String(parsed_date.to_rfc3339()),
+        ));
         param_index += 1;
     }
 
     if let Some(transaction_type) = &request.transaction_type {
         update_fields.push(format!("`transaction_type` = ?{param_index}"));
-        params.push(Value::String(transaction_type.to_string()));
+        params_with_mapping.push((
+            "transaction_type".to_string(),
+            Value::String(transaction_type.to_string()),
+        ));
         param_index += 1;
     }
 
     if let Some(status) = &request.status {
         update_fields.push(format!("`status` = ?{param_index}"));
-        params.push(Value::String(status.to_string()));
+        params_with_mapping.push(("status".to_string(), Value::String(status.to_string())));
         param_index += 1;
     }
 
     if let Some(reference_number) = &request.reference_number {
         update_fields.push(format!("`reference_number` = ?{param_index}"));
-        params.push(Value::String(reference_number.clone()));
+        params_with_mapping.push((
+            "reference_number".to_string(),
+            Value::String(reference_number.clone()),
+        ));
         param_index += 1;
     }
 
     if let Some(payee) = &request.payee {
         update_fields.push(format!("`payee` = ?{param_index}"));
-        params.push(Value::String(payee.clone()));
+        params_with_mapping.push(("payee".to_string(), Value::String(payee.clone())));
         param_index += 1;
     }
 
     if let Some(tags) = &request.tags {
         let tags_json = serde_json::to_string(tags).unwrap_or_else(|_| "[]".to_string());
         update_fields.push(format!("`tags` = ?{param_index}"));
-        params.push(Value::String(tags_json));
+        params_with_mapping.push(("tags".to_string(), Value::String(tags_json)));
         param_index += 1;
     }
 
@@ -359,10 +459,13 @@ pub async fn update_transaction(
     with_transaction!(&*db, async {
         // Update transaction
         update_fields.push(format!("`updated_at` = ?{param_index}"));
-        params.push(Value::String(chrono::Utc::now().to_rfc3339()));
+        params_with_mapping.push((
+            "updated_at".to_string(),
+            Value::String(chrono::Utc::now().to_rfc3339()),
+        ));
         param_index += 1;
 
-        params.push(Value::String(transaction_id.clone()));
+        params_with_mapping.push(("id".to_string(), Value::String(transaction_id.clone())));
 
         let update_query = format!(
             "UPDATE transactions SET {} WHERE id = ?{}",
@@ -370,7 +473,16 @@ pub async fn update_transaction(
             param_index
         );
 
-        let affected_rows = DatabaseUtils::execute_non_query(&db, &update_query, params).await?;
+        // Encrypt sensitive parameters before update
+        let encrypted_params = EncryptedDatabaseUtils::encrypt_params_with_mapping(
+            params_with_mapping,
+            &user_id,
+            "transactions",
+        )
+        .await?;
+
+        let affected_rows =
+            DatabaseUtils::execute_non_query(&db, &update_query, encrypted_params).await?;
 
         if affected_rows == 0 {
             return Err(FiscusError::NotFound("Transaction not found".to_string()));
@@ -510,22 +622,57 @@ pub async fn create_transfer(
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
         "#;
 
-        let transfer_params = vec![
-            Value::String(transfer_id.clone()),
-            Value::String(request.user_id.clone()),
-            Value::String(request.from_account_id.clone()),
-            Value::String(request.to_account_id.clone()),
-            Value::String(request.amount.to_string()),
-            Value::String(request.description.clone()),
-            Value::String(transfer_date.to_rfc3339()),
-            Value::String(TransactionStatus::Completed.to_string()),
-            Value::String(from_transaction_id.clone()),
-            Value::String(to_transaction_id.clone()),
-            Value::String(now.clone()),
-            Value::String(now.clone()),
+        // Use encrypted parameter mapping for transfer record
+        let transfer_params_with_mapping = vec![
+            ("id".to_string(), Value::String(transfer_id.clone())),
+            (
+                "user_id".to_string(),
+                Value::String(request.user_id.clone()),
+            ),
+            (
+                "from_account_id".to_string(),
+                Value::String(request.from_account_id.clone()),
+            ),
+            (
+                "to_account_id".to_string(),
+                Value::String(request.to_account_id.clone()),
+            ),
+            (
+                "amount".to_string(),
+                Value::String(request.amount.to_string()),
+            ),
+            (
+                "description".to_string(),
+                Value::String(request.description.clone()),
+            ),
+            (
+                "transfer_date".to_string(),
+                Value::String(transfer_date.to_rfc3339()),
+            ),
+            (
+                "status".to_string(),
+                Value::String(TransactionStatus::Completed.to_string()),
+            ),
+            (
+                "from_transaction_id".to_string(),
+                Value::String(from_transaction_id.clone()),
+            ),
+            (
+                "to_transaction_id".to_string(),
+                Value::String(to_transaction_id.clone()),
+            ),
+            ("created_at".to_string(), Value::String(now.clone())),
+            ("updated_at".to_string(), Value::String(now.clone())),
         ];
 
-        DatabaseUtils::execute_non_query(&db, transfer_query, transfer_params).await?;
+        let encrypted_transfer_params = EncryptedDatabaseUtils::encrypt_params_with_mapping(
+            transfer_params_with_mapping,
+            &request.user_id,
+            "transfers",
+        )
+        .await?;
+
+        DatabaseUtils::execute_non_query(&db, transfer_query, encrypted_transfer_params).await?;
 
         // Create outgoing transaction (expense)
         let from_transaction_query = r#"
@@ -535,20 +682,50 @@ pub async fn create_transfer(
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
         "#;
 
-        let from_params = vec![
-            Value::String(from_transaction_id),
-            Value::String(request.user_id.clone()),
-            Value::String(request.from_account_id.clone()),
-            Value::String((-request.amount).to_string()), // Negative for outgoing
-            Value::String(format!("Transfer to account: {}", request.description)),
-            Value::String(transfer_date.to_rfc3339()),
-            Value::String(TransactionType::Transfer.to_string()),
-            Value::String(TransactionStatus::Completed.to_string()),
-            Value::String(now.clone()),
-            Value::String(now.clone()),
+        // Use encrypted parameter mapping for outgoing transaction
+        let from_params_with_mapping = vec![
+            ("id".to_string(), Value::String(from_transaction_id)),
+            (
+                "user_id".to_string(),
+                Value::String(request.user_id.clone()),
+            ),
+            (
+                "account_id".to_string(),
+                Value::String(request.from_account_id.clone()),
+            ),
+            (
+                "amount".to_string(),
+                Value::String((-request.amount).to_string()),
+            ), // Negative for outgoing
+            (
+                "description".to_string(),
+                Value::String(format!("Transfer to account: {}", request.description)),
+            ),
+            (
+                "transaction_date".to_string(),
+                Value::String(transfer_date.to_rfc3339()),
+            ),
+            (
+                "transaction_type".to_string(),
+                Value::String(TransactionType::Transfer.to_string()),
+            ),
+            (
+                "status".to_string(),
+                Value::String(TransactionStatus::Completed.to_string()),
+            ),
+            ("created_at".to_string(), Value::String(now.clone())),
+            ("updated_at".to_string(), Value::String(now.clone())),
         ];
 
-        DatabaseUtils::execute_non_query(&db, from_transaction_query, from_params).await?;
+        let encrypted_from_params = EncryptedDatabaseUtils::encrypt_params_with_mapping(
+            from_params_with_mapping,
+            &request.user_id,
+            "transactions",
+        )
+        .await?;
+
+        DatabaseUtils::execute_non_query(&db, from_transaction_query, encrypted_from_params)
+            .await?;
 
         // Create incoming transaction (income)
         let to_transaction_query = r#"
@@ -558,20 +735,49 @@ pub async fn create_transfer(
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
         "#;
 
-        let to_params = vec![
-            Value::String(to_transaction_id),
-            Value::String(request.user_id.clone()),
-            Value::String(request.to_account_id.clone()),
-            Value::String(request.amount.to_string()), // Positive for incoming
-            Value::String(format!("Transfer from account: {}", request.description)),
-            Value::String(transfer_date.to_rfc3339()),
-            Value::String(TransactionType::Transfer.to_string()),
-            Value::String(TransactionStatus::Completed.to_string()),
-            Value::String(now.clone()),
-            Value::String(now),
+        // Use encrypted parameter mapping for incoming transaction
+        let to_params_with_mapping = vec![
+            ("id".to_string(), Value::String(to_transaction_id)),
+            (
+                "user_id".to_string(),
+                Value::String(request.user_id.clone()),
+            ),
+            (
+                "account_id".to_string(),
+                Value::String(request.to_account_id.clone()),
+            ),
+            (
+                "amount".to_string(),
+                Value::String(request.amount.to_string()),
+            ), // Positive for incoming
+            (
+                "description".to_string(),
+                Value::String(format!("Transfer from account: {}", request.description)),
+            ),
+            (
+                "transaction_date".to_string(),
+                Value::String(transfer_date.to_rfc3339()),
+            ),
+            (
+                "transaction_type".to_string(),
+                Value::String(TransactionType::Transfer.to_string()),
+            ),
+            (
+                "status".to_string(),
+                Value::String(TransactionStatus::Completed.to_string()),
+            ),
+            ("created_at".to_string(), Value::String(now.clone())),
+            ("updated_at".to_string(), Value::String(now)),
         ];
 
-        DatabaseUtils::execute_non_query(&db, to_transaction_query, to_params).await?;
+        let encrypted_to_params = EncryptedDatabaseUtils::encrypt_params_with_mapping(
+            to_params_with_mapping,
+            &request.user_id,
+            "transactions",
+        )
+        .await?;
+
+        DatabaseUtils::execute_non_query(&db, to_transaction_query, encrypted_to_params).await?;
 
         // Update account balances
         let from_balance =
@@ -606,6 +812,23 @@ pub async fn get_transfer_by_id(
 ) -> Result<Transfer, FiscusError> {
     Validator::validate_uuid(&transfer_id, "transfer_id")?;
 
+    // First, get the user_id for this transfer (this field is not encrypted)
+    let user_query = "SELECT user_id FROM transfers WHERE id = ?1";
+    let user_result: Option<HashMap<String, serde_json::Value>> =
+        DatabaseUtils::execute_query_single(
+            &db,
+            user_query,
+            vec![Value::String(transfer_id.clone())],
+        )
+        .await?;
+
+    let user_id = user_result
+        .and_then(|row| {
+            row.get("user_id")
+                .and_then(|v| v.as_str().map(|s| s.to_string()))
+        })
+        .ok_or_else(|| FiscusError::NotFound("Transfer not found".to_string()))?;
+
     let query = r#"
         SELECT id, user_id, from_account_id, to_account_id, amount, description,
                transfer_date, status, from_transaction_id, to_transaction_id,
@@ -614,11 +837,20 @@ pub async fn get_transfer_by_id(
         WHERE id = ?1
     "#;
 
-    let transfer: Option<Transfer> =
-        DatabaseUtils::execute_query_single(&db, query, vec![Value::String(transfer_id.clone())])
-            .await?;
+    // Use encrypted query to properly decrypt sensitive fields
+    let transfers: Vec<Transfer> = EncryptedDatabaseUtils::execute_encrypted_query(
+        &db,
+        query,
+        vec![Value::String(transfer_id.clone())],
+        &user_id,
+        "transfers",
+    )
+    .await?;
 
-    transfer.ok_or_else(|| FiscusError::NotFound("Transfer not found".to_string()))
+    transfers
+        .into_iter()
+        .next()
+        .ok_or_else(|| FiscusError::NotFound("Transfer not found".to_string()))
 }
 
 /// Get transaction summary for a user

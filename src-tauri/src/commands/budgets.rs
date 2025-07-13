@@ -4,7 +4,7 @@ use tauri::State;
 use uuid::Uuid;
 
 use crate::{
-    database::{Database, DatabaseUtils},
+    database::{encrypted::EncryptedDatabaseUtils, Database, DatabaseUtils},
     dto::{
         BudgetFilters, BudgetSummaryResponse, CreateBudgetPeriodRequest, CreateBudgetRequest,
         UpdateBudgetRequest,
@@ -202,23 +202,49 @@ pub async fn create_budget(
         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
     "#;
 
-    let params = vec![
-        Value::String(budget_id.clone()),
-        Value::String(request.user_id.clone()),
-        Value::String(request.budget_period_id.clone()),
-        Value::String(request.category_id.clone()),
-        Value::String(request.allocated_amount.to_string()),
-        Value::String(rust_decimal::Decimal::ZERO.to_string()),
-        request
-            .notes
-            .as_ref()
-            .map(|n| Value::String(n.clone()))
-            .unwrap_or(Value::Null),
-        Value::String(now.clone()),
-        Value::String(now),
+    // Use encrypted parameter mapping for sensitive fields
+    let params_with_mapping = vec![
+        ("id".to_string(), Value::String(budget_id.clone())),
+        (
+            "user_id".to_string(),
+            Value::String(request.user_id.clone()),
+        ),
+        (
+            "budget_period_id".to_string(),
+            Value::String(request.budget_period_id.clone()),
+        ),
+        (
+            "category_id".to_string(),
+            Value::String(request.category_id.clone()),
+        ),
+        (
+            "allocated_amount".to_string(),
+            Value::String(request.allocated_amount.to_string()),
+        ),
+        (
+            "spent_amount".to_string(),
+            Value::String(rust_decimal::Decimal::ZERO.to_string()),
+        ),
+        (
+            "notes".to_string(),
+            request
+                .notes
+                .as_ref()
+                .map(|n| Value::String(n.clone()))
+                .unwrap_or(Value::Null),
+        ),
+        ("created_at".to_string(), Value::String(now.clone())),
+        ("updated_at".to_string(), Value::String(now)),
     ];
 
-    DatabaseUtils::execute_non_query(&db, insert_query, params).await?;
+    let encrypted_params = EncryptedDatabaseUtils::encrypt_params_with_mapping(
+        params_with_mapping,
+        &request.user_id,
+        "budgets",
+    )
+    .await?;
+
+    DatabaseUtils::execute_non_query(&db, insert_query, encrypted_params).await?;
 
     // Return the created budget
     get_budget_by_id(budget_id, db).await
@@ -236,7 +262,7 @@ pub async fn get_budgets(
 
     // Build query with filters
     let mut filter_map = HashMap::new();
-    filter_map.insert("user_id".to_string(), filters.user_id);
+    filter_map.insert("user_id".to_string(), filters.user_id.clone());
 
     if let Some(period_id) = filters.budget_period_id {
         Validator::validate_uuid(&period_id, "budget_period_id")?;
@@ -269,8 +295,15 @@ pub async fn get_budgets(
 
     let final_query = format!("{base_query} {where_clause} {order_clause}");
 
-    let budgets: Vec<Budget> =
-        DatabaseUtils::execute_query(&db, &final_query, where_params).await?;
+    // Use encrypted query to properly decrypt sensitive fields
+    let budgets: Vec<Budget> = EncryptedDatabaseUtils::execute_encrypted_query(
+        &db,
+        &final_query,
+        where_params,
+        &filters.user_id,
+        "budgets",
+    )
+    .await?;
 
     Ok(budgets)
 }
@@ -283,18 +316,44 @@ pub async fn get_budget_by_id(
 ) -> Result<Budget, FiscusError> {
     Validator::validate_uuid(&budget_id, "budget_id")?;
 
+    // First, get the user_id for this budget (this field is not encrypted)
+    let user_query = "SELECT user_id FROM budgets WHERE id = ?1";
+    let user_result: Option<HashMap<String, serde_json::Value>> =
+        DatabaseUtils::execute_query_single(
+            &db,
+            user_query,
+            vec![Value::String(budget_id.clone())],
+        )
+        .await?;
+
+    let user_id = user_result
+        .and_then(|row| {
+            row.get("user_id")
+                .and_then(|v| v.as_str().map(|s| s.to_string()))
+        })
+        .ok_or_else(|| FiscusError::NotFound("Budget not found".to_string()))?;
+
     let query = r#"
         SELECT id, user_id, budget_period_id, category_id, allocated_amount,
                spent_amount, notes, created_at, updated_at
-        FROM budgets 
+        FROM budgets
         WHERE id = ?1
     "#;
 
-    let budget: Option<Budget> =
-        DatabaseUtils::execute_query_single(&db, query, vec![Value::String(budget_id.clone())])
-            .await?;
+    // Use encrypted query to properly decrypt sensitive fields
+    let budgets: Vec<Budget> = EncryptedDatabaseUtils::execute_encrypted_query(
+        &db,
+        query,
+        vec![Value::String(budget_id.clone())],
+        &user_id,
+        "budgets",
+    )
+    .await?;
 
-    budget.ok_or_else(|| FiscusError::NotFound("Budget not found".to_string()))
+    budgets
+        .into_iter()
+        .next()
+        .ok_or_else(|| FiscusError::NotFound("Budget not found".to_string()))
 }
 
 /// Update a budget
@@ -328,21 +387,24 @@ pub async fn update_budget(
         ));
     }
 
-    // Build update query dynamically
+    // Build update query dynamically with encrypted parameter mapping
     let mut update_fields = Vec::new();
-    let mut params = Vec::new();
+    let mut params_with_mapping = Vec::new();
     let mut param_index = 1;
 
     if let Some(allocated_amount) = request.allocated_amount {
         Validator::validate_amount(allocated_amount, false)?;
         update_fields.push(format!("`allocated_amount` = ?{param_index}"));
-        params.push(Value::String(allocated_amount.to_string()));
+        params_with_mapping.push((
+            "allocated_amount".to_string(),
+            Value::String(allocated_amount.to_string()),
+        ));
         param_index += 1;
     }
 
     if let Some(notes) = &request.notes {
         update_fields.push(format!("`notes` = ?{param_index}"));
-        params.push(Value::String(notes.clone()));
+        params_with_mapping.push(("notes".to_string(), Value::String(notes.clone())));
         param_index += 1;
     }
 
@@ -352,11 +414,14 @@ pub async fn update_budget(
 
     // Add updated_at timestamp
     update_fields.push(format!("`updated_at` = ?{param_index}"));
-    params.push(Value::String(chrono::Utc::now().to_rfc3339()));
+    params_with_mapping.push((
+        "updated_at".to_string(),
+        Value::String(chrono::Utc::now().to_rfc3339()),
+    ));
     param_index += 1;
 
     // Add budget_id for WHERE clause
-    params.push(Value::String(budget_id.clone()));
+    params_with_mapping.push(("id".to_string(), Value::String(budget_id.clone())));
 
     let update_query = format!(
         "UPDATE budgets SET {} WHERE id = ?{}",
@@ -364,7 +429,16 @@ pub async fn update_budget(
         param_index
     );
 
-    let affected_rows = DatabaseUtils::execute_non_query(&db, &update_query, params).await?;
+    // Encrypt sensitive parameters before update
+    let encrypted_params = EncryptedDatabaseUtils::encrypt_params_with_mapping(
+        params_with_mapping,
+        &user_id,
+        "budgets",
+    )
+    .await?;
+
+    let affected_rows =
+        DatabaseUtils::execute_non_query(&db, &update_query, encrypted_params).await?;
 
     if affected_rows == 0 {
         return Err(FiscusError::NotFound("Budget not found".to_string()));
@@ -419,8 +493,9 @@ pub async fn get_budget_summary(
     Validator::validate_uuid(&user_id, "user_id")?;
     DatabaseUtils::validate_user_exists(&db, &user_id).await?;
 
+    // For aggregation on encrypted fields, we need to fetch all budgets first and decrypt them
     let mut where_conditions = vec!["user_id = ?1".to_string()];
-    let mut params = vec![Value::String(user_id)];
+    let mut params = vec![Value::String(user_id.clone())];
 
     if let Some(period_id) = budget_period_id {
         Validator::validate_uuid(&period_id, "budget_period_id")?;
@@ -428,45 +503,55 @@ pub async fn get_budget_summary(
         params.push(Value::String(period_id));
     }
 
-    let summary_query = format!(
+    let budgets_query = format!(
         r#"
-        SELECT 
-            COALESCE(SUM(allocated_amount), 0) as total_allocated,
-            COALESCE(SUM(spent_amount), 0) as total_spent,
-            COUNT(CASE WHEN spent_amount > allocated_amount THEN 1 END) as categories_over_budget,
-            COUNT(CASE WHEN spent_amount <= allocated_amount THEN 1 END) as categories_under_budget
+        SELECT id, user_id, budget_period_id, category_id, allocated_amount,
+               spent_amount, notes, created_at, updated_at
         FROM budgets
         WHERE {}
     "#,
         where_conditions.join(" AND ")
     );
 
-    let summary: Option<HashMap<String, serde_json::Value>> =
-        DatabaseUtils::execute_query_single(&db, &summary_query, params).await?;
+    // Use encrypted query to properly decrypt amount fields
+    let budgets: Vec<HashMap<String, serde_json::Value>> =
+        EncryptedDatabaseUtils::execute_encrypted_query(
+            &db,
+            &budgets_query,
+            params,
+            &user_id,
+            "budgets",
+        )
+        .await?;
 
-    let summary_data = summary.unwrap_or_default();
+    // Calculate summary from decrypted budget data
+    let mut total_allocated = rust_decimal::Decimal::ZERO;
+    let mut total_spent = rust_decimal::Decimal::ZERO;
+    let mut categories_over_budget = 0i32;
+    let mut categories_under_budget = 0i32;
 
-    let total_allocated = summary_data
-        .get("total_allocated")
-        .and_then(|v| v.as_str())
-        .and_then(|s| s.parse::<rust_decimal::Decimal>().ok())
-        .unwrap_or(rust_decimal::Decimal::ZERO);
+    for budget in budgets {
+        let allocated_amount = budget
+            .get("allocated_amount")
+            .and_then(|v| v.as_str())
+            .and_then(|s| s.parse::<rust_decimal::Decimal>().ok())
+            .unwrap_or(rust_decimal::Decimal::ZERO);
 
-    let total_spent = summary_data
-        .get("total_spent")
-        .and_then(|v| v.as_str())
-        .and_then(|s| s.parse::<rust_decimal::Decimal>().ok())
-        .unwrap_or(rust_decimal::Decimal::ZERO);
+        let spent_amount = budget
+            .get("spent_amount")
+            .and_then(|v| v.as_str())
+            .and_then(|s| s.parse::<rust_decimal::Decimal>().ok())
+            .unwrap_or(rust_decimal::Decimal::ZERO);
 
-    let categories_over_budget = summary_data
-        .get("categories_over_budget")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(0) as i32;
+        total_allocated += allocated_amount;
+        total_spent += spent_amount;
 
-    let categories_under_budget = summary_data
-        .get("categories_under_budget")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(0) as i32;
+        if spent_amount > allocated_amount {
+            categories_over_budget += 1;
+        } else {
+            categories_under_budget += 1;
+        }
+    }
 
     let remaining = total_allocated - total_spent;
 

@@ -8,7 +8,7 @@ use tauri::State;
 use uuid::Uuid;
 
 use crate::{
-    database::{Database, DatabaseUtils},
+    database::{encrypted::EncryptedDatabaseUtils, Database, DatabaseUtils},
     dto::{ChangePasswordRequest, CreateUserRequest, LoginRequest, LoginResponse, UserResponse},
     error::{FiscusError, FiscusResult, Validator},
 };
@@ -69,20 +69,31 @@ pub async fn create_user(
         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
     "#;
 
-    let params = vec![
-        Value::String(user_id.clone()),
-        Value::String(request.username.clone()),
-        request
-            .email
-            .as_ref()
-            .map(|e| Value::String(e.clone()))
-            .unwrap_or(Value::Null),
-        Value::String(password_hash),
-        Value::String(now.clone()),
-        Value::String(now),
+    // Use encrypted parameter mapping for sensitive fields
+    let params_with_mapping = vec![
+        ("id".to_string(), Value::String(user_id.clone())),
+        (
+            "username".to_string(),
+            Value::String(request.username.clone()),
+        ),
+        (
+            "email".to_string(),
+            request
+                .email
+                .as_ref()
+                .map(|e| Value::String(e.clone()))
+                .unwrap_or(Value::Null),
+        ),
+        ("password_hash".to_string(), Value::String(password_hash)),
+        ("created_at".to_string(), Value::String(now.clone())),
+        ("updated_at".to_string(), Value::String(now)),
     ];
 
-    DatabaseUtils::execute_non_query(&db, insert_query, params).await?;
+    let encrypted_params =
+        EncryptedDatabaseUtils::encrypt_params_with_mapping(params_with_mapping, &user_id, "users")
+            .await?;
+
+    DatabaseUtils::execute_non_query(&db, insert_query, encrypted_params).await?;
 
     // Return user response (without password hash)
     Ok(UserResponse {
@@ -104,11 +115,36 @@ pub async fn login_user(
     Validator::validate_string(&request.username, "username", 1, 50)?;
     Validator::validate_string(&request.password, "password", 1, 128)?;
 
-    // Find user by username
+    // Find user by username - first get user_id for encryption context
+    let user_id_query = "SELECT id FROM users WHERE username = ?1";
+    let user_id_row: Option<std::collections::HashMap<String, Value>> =
+        DatabaseUtils::execute_query_single(
+            &db,
+            user_id_query,
+            vec![Value::String(request.username.clone())],
+        )
+        .await?;
+
+    let user_id = user_id_row
+        .and_then(|row| {
+            row.get("id")
+                .and_then(|v| v.as_str().map(|s| s.to_string()))
+        })
+        .ok_or_else(|| FiscusError::Authentication("Invalid credentials".to_string()))?;
+
+    // Now get full user data with decryption
     let user_query = "SELECT id, username, email, password_hash, created_at, updated_at FROM users WHERE username = ?1";
-    let user_row: Option<std::collections::HashMap<String, Value>> =
-        DatabaseUtils::execute_query_single(&db, user_query, vec![Value::String(request.username)])
-            .await?;
+    let user_rows: Vec<std::collections::HashMap<String, Value>> =
+        EncryptedDatabaseUtils::execute_encrypted_query(
+            &db,
+            user_query,
+            vec![Value::String(request.username)],
+            &user_id,
+            "users",
+        )
+        .await?;
+
+    let user_row = user_rows.into_iter().next();
 
     let user_data =
         user_row.ok_or_else(|| FiscusError::Authentication("Invalid credentials".to_string()))?;
@@ -223,8 +259,19 @@ pub async fn get_current_user(
     Validator::validate_uuid(&user_id, "user_id")?;
 
     let user_query = "SELECT id, username, email, created_at, updated_at FROM users WHERE id = ?1";
-    let user_row: Option<std::collections::HashMap<String, Value>> =
-        DatabaseUtils::execute_query_single(&db, user_query, vec![Value::String(user_id)]).await?;
+
+    // Use encrypted query to properly decrypt email field
+    let user_rows: Vec<std::collections::HashMap<String, Value>> =
+        EncryptedDatabaseUtils::execute_encrypted_query(
+            &db,
+            user_query,
+            vec![Value::String(user_id.clone())],
+            &user_id,
+            "users",
+        )
+        .await?;
+
+    let user_row = user_rows.into_iter().next();
 
     let user_data = user_row.ok_or_else(|| FiscusError::NotFound("User not found".to_string()))?;
 

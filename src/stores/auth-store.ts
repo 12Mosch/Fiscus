@@ -103,7 +103,10 @@ export const useAuthStore = create<AuthStore>()(
 						// If auto-login fails, still consider registration successful
 						set({
 							loading: false,
-							error: null,
+							error: new FiscusApiError(
+								"Registration successful, but automatic login failed. Please login manually.",
+								"AUTHENTICATION_ERROR",
+							),
 						});
 					}
 
@@ -197,6 +200,9 @@ export const useAuthStore = create<AuthStore>()(
 			},
 
 			initialize: async (): Promise<void> => {
+				const { initialized } = get();
+				if (initialized) return;
+
 				const { user } = get();
 
 				if (user) {

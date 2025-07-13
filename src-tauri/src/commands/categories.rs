@@ -34,13 +34,6 @@ pub async fn create_category(
     // Validate parent category exists and belongs to user (if provided)
     if let Some(ref parent_id) = request.parent_category_id {
         DatabaseUtils::validate_category_ownership(&db, parent_id, &request.user_id).await?;
-
-        // Check for circular reference (prevent category being its own parent)
-        if parent_id == &request.user_id {
-            return Err(FiscusError::InvalidInput(
-                "Category cannot be its own parent".to_string(),
-            ));
-        }
     }
 
     // Check if category name already exists for this user

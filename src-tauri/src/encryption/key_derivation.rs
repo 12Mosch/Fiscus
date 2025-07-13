@@ -306,7 +306,7 @@ impl KeyDerivation for ScryptKdf {
             ));
         }
 
-        let log_n = params.time_cost.unwrap_or(8) as u8;
+        let log_n = params.time_cost.unwrap_or(15) as u8;
         let r = params.memory_cost.unwrap_or(8);
         let p = params.parallelism.unwrap_or(1);
 

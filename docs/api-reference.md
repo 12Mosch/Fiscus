@@ -390,6 +390,7 @@ console.log('Total Allocated:', summary.total_allocated);
 console.log('Total Spent:', summary.total_spent);
 console.log('Remaining:', summary.remaining);
 console.log('Over Budget:', summary.over_budget);
+```
 
 ## Goal Management API
 

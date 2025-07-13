@@ -225,6 +225,11 @@ mod tests {
 
     #[test]
     fn test_config_from_env() {
+        // Save original values
+        let original_level = env::var("FISCUS_LOG_LEVEL").ok();
+        let original_format = env::var("FISCUS_LOG_FORMAT").ok();
+        let original_env = env::var("FISCUS_ENV").ok();
+
         env::set_var("FISCUS_LOG_LEVEL", "debug");
         env::set_var("FISCUS_LOG_FORMAT", "json");
         env::set_var("FISCUS_ENV", "production");

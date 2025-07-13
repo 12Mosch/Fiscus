@@ -360,12 +360,8 @@ mod logging_tests {
 
         assert_eq!(sanitized.len(), 4);
         assert_eq!(sanitized[0], Value::String("user123".to_string()));
-        // The password value should be sanitized by regex pattern, not field name
-        assert!(
-            sanitized[1].as_str().unwrap().contains("[EMAIL-***]")
-                || sanitized[1] == Value::String("password123".to_string())
-        );
-        assert!(sanitized[2].as_str().unwrap().contains("[EMAIL-***]")); // email pattern
+        assert_eq!(sanitized[1], Value::String("password123".to_string()));
+        assert!(sanitized[2].as_str().unwrap().contains("[EMAIL-***]"));
         assert_eq!(sanitized[3], Value::Number(serde_json::Number::from(1000)));
     }
 }

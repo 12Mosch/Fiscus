@@ -388,6 +388,16 @@ pub async fn update_transaction(
         new_amount = amount;
     }
 
+    // Track transaction type changes for balance calculation
+    let mut transaction_type_changed = false;
+    let mut new_transaction_type = current_transaction.transaction_type.clone();
+    if let Some(transaction_type) = &request.transaction_type {
+        if *transaction_type != current_transaction.transaction_type {
+            transaction_type_changed = true;
+            new_transaction_type = transaction_type.clone();
+        }
+    }
+
     if let Some(description) = &request.description {
         Validator::validate_string(description, "description", 1, 255)?;
         update_fields.push(format!("`description` = ?{param_index}"));
@@ -488,20 +498,23 @@ pub async fn update_transaction(
             return Err(FiscusError::NotFound("Transaction not found".to_string()));
         }
 
-        // Update account balance if amount changed
-        if amount_changed && current_transaction.transaction_type != TransactionType::Transfer {
+        // Update account balance if amount or transaction type changed
+        if (amount_changed || transaction_type_changed)
+            && current_transaction.transaction_type != TransactionType::Transfer
+            && new_transaction_type != TransactionType::Transfer
+        {
             let current_balance =
                 DatabaseUtils::get_account_balance(&db, &current_transaction.account_id).await?;
 
-            // Reverse the old transaction effect
+            // Reverse the old transaction effect using the original transaction type and amount
             let balance_after_reversal = match current_transaction.transaction_type {
                 TransactionType::Income => current_balance - current_transaction.amount,
                 TransactionType::Expense => current_balance + current_transaction.amount,
                 TransactionType::Transfer => current_balance,
             };
 
-            // Apply the new transaction effect
-            let new_balance = match current_transaction.transaction_type {
+            // Apply the new transaction effect using the new transaction type and amount
+            let new_balance = match new_transaction_type {
                 TransactionType::Income => balance_after_reversal + new_amount,
                 TransactionType::Expense => balance_after_reversal - new_amount,
                 TransactionType::Transfer => balance_after_reversal,

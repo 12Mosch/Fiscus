@@ -189,7 +189,7 @@ pub async fn generate_encryption_key(
     );
 
     // For now, return a placeholder response since key generation
-    // should be handled internally by the encryption service
+    // TODO: should be handled internally by the encryption service
     warn!("Key generation endpoint is for demonstration - keys are managed internally");
 
     let key_id = uuid::Uuid::new_v4().to_string();
@@ -282,16 +282,10 @@ pub async fn derive_key_from_password(
         "Deriving key from password"
     );
 
-    // This is a simplified implementation - in production, you'd want more sophisticated key derivation
-    warn!("Key derivation from password not fully implemented - using placeholder");
-
-    let response = DeriveKeyResponse {
-        key_id: uuid::Uuid::new_v4().to_string(),
-        algorithm: request.algorithm,
-        derived_at: chrono::Utc::now(),
-    };
-
-    Ok(response)
+    // TODO: This is a simplified implementation - in production, you'd want more sophisticated key derivation
+    Err(FiscusError::Internal(
+        "Key derivation from password not implemented".to_string(),
+    ))
 }
 
 #[cfg(test)]

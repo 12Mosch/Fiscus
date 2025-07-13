@@ -615,7 +615,19 @@ test.describe('API Integration Flows', () => {
 
 async function setupTestUserAndAccount(page) {
   // Helper function to set up test data
-  // This could involve API calls or database seeding
+  // Example implementation:
+  await page.goto('/');
+  await page.evaluate(() => {
+    // Set up test user in local storage or through API
+    localStorage.setItem('test-user', JSON.stringify({
+      id: 'test-user-123',
+      username: 'testuser'
+    }));
+  });
+
+  // Navigate to login state
+  await page.goto('/dashboard');
+  await page.waitForSelector('[data-testid="dashboard"]');
 }
 ```
 

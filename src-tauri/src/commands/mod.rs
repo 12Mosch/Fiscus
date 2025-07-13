@@ -8,6 +8,7 @@ pub mod categories;
 pub mod encryption;
 pub mod goals;
 pub mod reports;
+pub mod secure_storage;
 pub mod transactions;
 
 // Re-export all command functions for easy registration
@@ -18,4 +19,5 @@ pub use categories::*;
 pub use encryption::*;
 pub use goals::*;
 pub use reports::*;
+pub use secure_storage::*;
 pub use transactions::*;

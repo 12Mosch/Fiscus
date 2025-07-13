@@ -394,6 +394,51 @@ pub struct VerifySignatureResponse {
     pub verified_at: DateTime<Utc>,
 }
 
+/// Secure storage DTOs
+#[derive(Debug, Deserialize)]
+pub struct SecureStoreRequest {
+    pub user_id: String,
+    pub data_type: String,
+    pub encrypted_data: String, // Base64 encoded encrypted data
+    pub nonce: String,          // Base64 encoded nonce
+    pub algorithm: EncryptionAlgorithm,
+    pub key_id: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SecureStoreResponse {
+    pub stored: bool,
+    pub storage_key: String,
+    pub stored_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SecureRetrieveRequest {
+    pub user_id: String,
+    pub data_type: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SecureRetrieveResponse {
+    pub encrypted_data: String, // Base64 encoded encrypted data
+    pub nonce: String,          // Base64 encoded nonce
+    pub algorithm: EncryptionAlgorithm,
+    pub key_id: String,
+    pub stored_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SecureDeleteRequest {
+    pub user_id: String,
+    pub data_type: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SecureDeleteResponse {
+    pub deleted: bool,
+    pub deleted_at: DateTime<Utc>,
+}
+
 impl From<crate::models::User> for UserResponse {
     fn from(user: crate::models::User) -> Self {
         Self {

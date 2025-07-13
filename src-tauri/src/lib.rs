@@ -122,6 +122,10 @@ pub fn run() {
             commands::rotate_user_keys,
             commands::get_encryption_stats,
             commands::derive_key_from_password,
+            // Secure storage commands
+            commands::secure_store,
+            commands::secure_retrieve,
+            commands::secure_delete,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -256,19 +256,65 @@ export class EncryptionApiClient {
 	 * Handle and transform errors from the backend
 	 */
 	private handleError(error: unknown): EncryptionError {
+		// Check if it's already a properly structured EncryptionError
 		if (
 			typeof error === "object" &&
 			error !== null &&
 			"type" in error &&
-			"message" in error
+			"message" in error &&
+			typeof error.type === "string" &&
+			typeof error.message === "string"
 		) {
-			return error as EncryptionError;
+			// Additional validation to ensure the type is a valid EncryptionError type
+			const validTypes = [
+				"encryption",
+				"key_derivation",
+				"key_management",
+				"cryptographic",
+				"validation",
+				"authentication",
+			];
+
+			if (validTypes.includes(error.type)) {
+				return error as EncryptionError;
+			}
 		}
 
+		// Convert Error instances to EncryptionError format
+		if (error instanceof Error) {
+			// Determine error type based on error name/type for better categorization
+			let errorType: EncryptionError["type"] = "encryption";
+
+			if (error.name.toLowerCase().includes("validation")) {
+				errorType = "validation";
+			} else if (error.name.toLowerCase().includes("auth")) {
+				errorType = "authentication";
+			} else if (error.name.toLowerCase().includes("key")) {
+				errorType = "key_management";
+			} else if (error.name.toLowerCase().includes("crypto")) {
+				errorType = "cryptographic";
+			}
+
+			return {
+				type: errorType,
+				message: error.message,
+				context: error.name !== "Error" ? error.name : undefined,
+			};
+		}
+
+		// Handle string errors
+		if (typeof error === "string") {
+			return {
+				type: "encryption",
+				message: error,
+			};
+		}
+
+		// Fallback for unknown error types
 		return {
 			type: "encryption",
-			message:
-				error instanceof Error ? error.message : "Unknown encryption error",
+			message: "Unknown encryption error",
+			context: typeof error,
 		};
 	}
 }
@@ -337,21 +383,4 @@ export function formatStats(
 // Create a singleton instance for easy use
 export const encryptionApi = new EncryptionApiClient();
 
-// Export types for convenience
-export type {
-	EncryptDataRequest,
-	DecryptDataRequest,
-	GenerateKeyRequest,
-	RotateKeysRequest,
-	DeriveKeyRequest,
-	SignDataRequest,
-	VerifySignatureRequest,
-	EncryptDataResponse,
-	DecryptDataResponse,
-	GenerateKeyResponse,
-	EncryptionStatsResponse,
-	DeriveKeyResponse,
-	SignDataResponse,
-	VerifySignatureResponse,
-	EncryptionError,
-};
+// Types are already exported above with their interface declarations

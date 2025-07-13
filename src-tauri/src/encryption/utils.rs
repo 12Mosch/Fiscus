@@ -4,6 +4,7 @@
 /// including secure random number generation, memory protection, and data conversion helpers.
 use base64::Engine;
 use rand::{rngs::OsRng, RngCore};
+use subtle::ConstantTimeEq;
 use tracing::{debug, error, instrument};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
@@ -103,7 +104,6 @@ impl MemoryProtection {
 /// A buffer that automatically clears its contents when dropped
 #[derive(ZeroizeOnDrop)]
 pub struct SecureBuffer {
-    #[zeroize(skip)]
     data: Vec<u8>,
 }
 
@@ -141,8 +141,8 @@ impl SecureBuffer {
     }
 
     /// Convert the buffer to a Vec<u8> (consumes the buffer)
-    pub fn into_vec(self) -> Vec<u8> {
-        self.data.clone()
+    pub fn into_vec(mut self) -> Vec<u8> {
+        std::mem::take(&mut self.data)
     }
 
     /// Resize the buffer (new bytes are zeroed)
@@ -161,6 +161,12 @@ impl std::fmt::Debug for SecureBuffer {
         f.debug_struct("SecureBuffer")
             .field("len", &self.data.len())
             .finish()
+    }
+}
+
+impl Zeroize for SecureBuffer {
+    fn zeroize(&mut self) {
+        self.data.zeroize();
     }
 }
 
@@ -211,16 +217,19 @@ pub struct TimingSafeComparison;
 
 impl TimingSafeComparison {
     /// Compare two byte slices in constant time
+    ///
+    /// This function uses the `subtle` crate to ensure constant-time comparison
+    /// that is resistant to timing attacks on the content of equal-length data.
+    ///
+    /// # Security Notes
+    /// - For equal-length inputs: performs constant-time comparison regardless of content
+    /// - For different-length inputs: may return quickly (length is not considered sensitive)
+    /// - Resistant to timing side-channel attacks that could reveal data content
+    /// - Uses cryptographically secure constant-time comparison from the `subtle` crate
     pub fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
-        if a.len() != b.len() {
-            return false;
-        }
-
-        let mut result = 0u8;
-        for (x, y) in a.iter().zip(b.iter()) {
-            result |= x ^ y;
-        }
-        result == 0
+        // Use the subtle crate's constant-time comparison
+        // This handles length differences in constant time
+        a.ct_eq(b).into()
     }
 
     /// Verify that two strings are equal in constant time

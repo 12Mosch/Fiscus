@@ -8,16 +8,22 @@
 import { useCallback, useEffect, useState } from "react";
 import {
 	type DecryptDataRequest,
+	decodeFromBase64,
 	type EncryptDataRequest,
 	type EncryptionAlgorithm,
 	EncryptionApiClient,
 	type EncryptionError,
 	type EncryptionStatsResponse,
-	EncryptionUtils,
+	encodeToBase64,
 	encryptionApi,
+	formatStats,
 	type GenerateKeyRequest,
+	generateSalt,
+	isValidAlgorithm,
+	isValidKeyType,
 	type RotateKeysRequest,
 } from "../api/encryption";
+import { secureStorage } from "../services/secureStorage";
 
 // Hook state types
 interface EncryptionState<T> {
@@ -29,6 +35,73 @@ interface EncryptionState<T> {
 interface EncryptionOperationState {
 	loading: boolean;
 	error: EncryptionError | null;
+}
+
+/**
+ * Safely converts unknown errors to EncryptionError format
+ * This prevents unsafe casting and ensures consistent error handling
+ */
+function toEncryptionError(error: unknown): EncryptionError {
+	// Check if it's already a properly structured EncryptionError
+	if (
+		typeof error === "object" &&
+		error !== null &&
+		"type" in error &&
+		"message" in error &&
+		typeof error.type === "string" &&
+		typeof error.message === "string"
+	) {
+		// Additional validation to ensure the type is a valid EncryptionError type
+		const validTypes = [
+			"encryption",
+			"key_derivation",
+			"key_management",
+			"cryptographic",
+			"validation",
+			"authentication",
+		];
+
+		if (validTypes.includes(error.type)) {
+			return error as EncryptionError;
+		}
+	}
+
+	// Convert Error instances to EncryptionError format
+	if (error instanceof Error) {
+		// Determine error type based on error name/type for better categorization
+		let errorType: EncryptionError["type"] = "encryption";
+
+		if (error.name.toLowerCase().includes("validation")) {
+			errorType = "validation";
+		} else if (error.name.toLowerCase().includes("auth")) {
+			errorType = "authentication";
+		} else if (error.name.toLowerCase().includes("key")) {
+			errorType = "key_management";
+		} else if (error.name.toLowerCase().includes("crypto")) {
+			errorType = "cryptographic";
+		}
+
+		return {
+			type: errorType,
+			message: error.message,
+			context: error.name !== "Error" ? error.name : undefined,
+		};
+	}
+
+	// Handle string errors
+	if (typeof error === "string") {
+		return {
+			type: "encryption",
+			message: error,
+		};
+	}
+
+	// Fallback for unknown error types
+	return {
+		type: "encryption",
+		message: "Unknown encryption error",
+		context: typeof error,
+	};
 }
 
 /**
@@ -45,7 +118,7 @@ export function useEncryptData() {
 			setState({ loading: true, error: null });
 
 			try {
-				const base64Data = EncryptionUtils.encodeToBase64(data);
+				const base64Data = encodeToBase64(data);
 				const request: EncryptDataRequest = {
 					user_id: userId,
 					data_type: dataType,
@@ -56,7 +129,7 @@ export function useEncryptData() {
 				setState({ loading: false, error: null });
 				return response;
 			} catch (error) {
-				const encryptionError = error as EncryptionError;
+				const encryptionError = toEncryptionError(error);
 				setState({ loading: false, error: encryptionError });
 				throw encryptionError;
 			}
@@ -102,7 +175,7 @@ export function useDecryptData() {
 				};
 
 				const response = await encryptionApi.decryptFinancialData(request);
-				const decryptedData = EncryptionUtils.decodeFromBase64(response.data);
+				const decryptedData = decodeFromBase64(response.data);
 
 				setState({ loading: false, error: null });
 				return {
@@ -110,7 +183,7 @@ export function useDecryptData() {
 					data: decryptedData, // Return decoded string instead of base64
 				};
 			} catch (error) {
-				const encryptionError = error as EncryptionError;
+				const encryptionError = toEncryptionError(error);
 				setState({ loading: false, error: encryptionError });
 				throw encryptionError;
 			}
@@ -148,7 +221,7 @@ export function useGenerateKey() {
 				setState({ loading: false, error: null });
 				return response;
 			} catch (error) {
-				const encryptionError = error as EncryptionError;
+				const encryptionError = toEncryptionError(error);
 				setState({ loading: false, error: encryptionError });
 				throw encryptionError;
 			}
@@ -184,7 +257,7 @@ export function useRotateKeys() {
 			setState({ loading: false, error: null });
 			return success;
 		} catch (error) {
-			const encryptionError = error as EncryptionError;
+			const encryptionError = toEncryptionError(error);
 			setState({ loading: false, error: encryptionError });
 			throw encryptionError;
 		}
@@ -215,7 +288,7 @@ export function useEncryptionStats() {
 			setState({ data: stats, loading: false, error: null });
 			return stats;
 		} catch (error) {
-			const encryptionError = error as EncryptionError;
+			const encryptionError = toEncryptionError(error);
 			setState((prev) => ({ ...prev, loading: false, error: encryptionError }));
 			throw encryptionError;
 		}
@@ -223,7 +296,19 @@ export function useEncryptionStats() {
 
 	// Auto-fetch on mount
 	useEffect(() => {
-		fetchStats();
+		let mounted = true;
+
+		const doFetch = async () => {
+			if (mounted) {
+				await fetchStats();
+			}
+		};
+
+		doFetch();
+
+		return () => {
+			mounted = false;
+		};
 	}, [fetchStats]);
 
 	return {
@@ -265,19 +350,15 @@ export function useSecureData<T>(
 					dataType,
 				);
 
-				// Store encrypted metadata for later retrieval
-				const encryptedMetadata = {
+				// Store encrypted data securely using Tauri backend instead of localStorage
+				await secureStorage.store({
+					user_id: userId,
+					data_type: dataType,
 					encrypted_data: encryptedResponse.encrypted_data,
 					nonce: encryptedResponse.nonce,
 					algorithm: encryptedResponse.algorithm,
 					key_id: encryptedResponse.key_id,
-				};
-
-				// In a real app, you'd store this in localStorage or a secure store
-				localStorage.setItem(
-					`secure_${dataType}_${userId}`,
-					JSON.stringify(encryptedMetadata),
-				);
+				});
 
 				setData(value);
 				setIsEncrypted(true);
@@ -292,19 +373,21 @@ export function useSecureData<T>(
 
 	const secureRetrieve = useCallback(async (): Promise<T | null> => {
 		try {
-			const storedMetadata = localStorage.getItem(
-				`secure_${dataType}_${userId}`,
-			);
-			if (!storedMetadata) {
+			// Retrieve encrypted data from secure backend storage
+			const storedData = await secureStorage.retrieve({
+				user_id: userId,
+				data_type: dataType,
+			});
+
+			if (!storedData) {
 				return null;
 			}
 
-			const metadata = JSON.parse(storedMetadata);
 			const decryptedResponse = await decryptData(
-				metadata.encrypted_data,
-				metadata.nonce,
-				metadata.algorithm,
-				metadata.key_id,
+				storedData.encrypted_data,
+				storedData.nonce,
+				storedData.algorithm,
+				storedData.key_id,
 				userId,
 				dataType,
 			);
@@ -319,10 +402,21 @@ export function useSecureData<T>(
 		}
 	}, [decryptData, userId, dataType]);
 
-	const secureClear = useCallback(() => {
-		localStorage.removeItem(`secure_${dataType}_${userId}`);
-		setData(null);
-		setIsEncrypted(false);
+	const secureClear = useCallback(async () => {
+		try {
+			// Delete encrypted data from secure backend storage
+			await secureStorage.delete({
+				user_id: userId,
+				data_type: dataType,
+			});
+			setData(null);
+			setIsEncrypted(false);
+		} catch (error) {
+			console.error("Failed to securely clear data:", error);
+			// Still clear local state even if backend deletion fails
+			setData(null);
+			setIsEncrypted(false);
+		}
 	}, [userId, dataType]);
 
 	return {
@@ -341,7 +435,8 @@ export function useSecureData<T>(
  */
 export function useEncryptionUtils() {
 	const validateData = useCallback((data: string): boolean => {
-		return data.length > 0 && data.length <= 1024 * 1024; // 1MB limit
+		const byteSize = new TextEncoder().encode(data).length;
+		return data.length > 0 && byteSize <= 1024 * 1024; // 1MB limit
 	}, []);
 
 	const generateSecureId = useCallback((): string => {
@@ -374,14 +469,14 @@ export function useEncryptionUtils() {
 		validateData,
 		generateSecureId,
 		formatEncryptionError,
-		encodeToBase64: EncryptionUtils.encodeToBase64,
-		decodeFromBase64: EncryptionUtils.decodeFromBase64,
-		generateSalt: EncryptionUtils.generateSalt,
-		isValidAlgorithm: EncryptionUtils.isValidAlgorithm,
-		isValidKeyType: EncryptionUtils.isValidKeyType,
-		formatStats: EncryptionUtils.formatStats,
+		encodeToBase64,
+		decodeFromBase64,
+		generateSalt,
+		isValidAlgorithm,
+		isValidKeyType,
+		formatStats,
 	};
 }
 
 // Export all hooks
-export { encryptionApi, EncryptionApiClient, EncryptionUtils };
+export { encryptionApi, EncryptionApiClient };

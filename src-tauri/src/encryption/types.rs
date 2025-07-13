@@ -3,6 +3,15 @@ use crate::error::FiscusError;
 ///
 /// This module defines all the fundamental types used throughout the encryption
 /// system, including encrypted data containers, keys, metadata, and result types.
+///
+/// ## Security Note on Enum Zeroization
+///
+/// Enum types in this module (EncryptionAlgorithm, KeyType, etc.) do NOT implement
+/// the Zeroize trait. This is intentional - enum discriminants cannot be properly
+/// zeroized in memory, and providing a misleading implementation that just changes
+/// the enum value would give a false sense of security. When these enums are used
+/// in security-sensitive contexts (like EncryptionKey), they are marked with
+/// #[zeroize(skip)] to prevent automatic zeroization attempts.
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, ZeroizeOnDrop};
@@ -26,14 +35,6 @@ pub enum EncryptionAlgorithm {
     X25519,
 }
 
-impl Zeroize for EncryptionAlgorithm {
-    fn zeroize(&mut self) {
-        // For enums, we can't really zeroize the discriminant,
-        // but we can set it to a default value
-        *self = EncryptionAlgorithm::Aes256Gcm;
-    }
-}
-
 /// Types of encryption keys
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -48,14 +49,6 @@ pub enum KeyType {
     DerivationKey,
     /// Master key for key encryption
     MasterKey,
-}
-
-impl Zeroize for KeyType {
-    fn zeroize(&mut self) {
-        // For enums, we can't really zeroize the discriminant,
-        // but we can set it to a default value
-        *self = KeyType::Symmetric;
-    }
 }
 
 /// Key derivation algorithms
@@ -106,11 +99,16 @@ pub struct EncryptionMetadata {
 #[derive(Debug, Clone, ZeroizeOnDrop)]
 pub struct EncryptionKey {
     /// The key material
-    #[zeroize(skip)]
     pub key_data: SecureBytes,
     /// Type of key
+    /// Note: Enum fields are skipped from zeroization as enum discriminants
+    /// cannot be properly zeroized - attempting to do so would be misleading
+    #[zeroize(skip)]
     pub key_type: KeyType,
     /// Algorithm this key is used with
+    /// Note: Enum fields are skipped from zeroization as enum discriminants
+    /// cannot be properly zeroized - attempting to do so would be misleading
+    #[zeroize(skip)]
     pub algorithm: EncryptionAlgorithm,
     /// Unique identifier for this key
     pub key_id: String,
@@ -127,7 +125,6 @@ pub struct EncryptionKey {
 /// Secure byte container that zeros memory on drop
 #[derive(Clone, ZeroizeOnDrop)]
 pub struct SecureBytes {
-    #[zeroize(skip)]
     data: Vec<u8>,
 }
 
@@ -153,8 +150,8 @@ impl SecureBytes {
     }
 
     /// Convert to Vec<u8> (consumes self)
-    pub fn into_vec(self) -> Vec<u8> {
-        self.data.clone()
+    pub fn into_vec(mut self) -> Vec<u8> {
+        std::mem::take(&mut self.data)
     }
 }
 
@@ -175,6 +172,12 @@ impl From<Vec<u8>> for SecureBytes {
 impl From<&[u8]> for SecureBytes {
     fn from(data: &[u8]) -> Self {
         Self::new(data.to_vec())
+    }
+}
+
+impl Zeroize for SecureBytes {
+    fn zeroize(&mut self) {
+        self.data.zeroize();
     }
 }
 
@@ -336,6 +339,32 @@ mod tests {
         assert_eq!(secure.as_slice(), &data);
         assert_eq!(secure.len(), 5);
         assert!(!secure.is_empty());
+    }
+
+    #[test]
+    fn test_secure_bytes_into_vec_moves_data() {
+        let data = vec![1, 2, 3, 4, 5];
+        let secure = SecureBytes::new(data.clone());
+        let recovered = secure.into_vec();
+        assert_eq!(recovered, data);
+    }
+
+    #[test]
+    fn test_secure_bytes_manual_zeroize() {
+        let data = vec![1, 2, 3, 4, 5];
+        let mut secure = SecureBytes::new(data);
+
+        // Verify data is present
+        assert_eq!(secure.as_slice(), &[1, 2, 3, 4, 5]);
+        assert_eq!(secure.len(), 5);
+
+        // Manually zeroize
+        secure.zeroize();
+
+        // Verify data is cleared (Vec::zeroize() clears the vector completely)
+        assert_eq!(secure.len(), 0);
+        assert!(secure.is_empty());
+        assert_eq!(secure.as_slice(), &[] as &[u8]);
     }
 
     #[test]

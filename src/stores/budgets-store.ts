@@ -185,7 +185,11 @@ export const useBudgetsStore = create<BudgetsStore>()((set, get) => ({
 
 			// Refresh summary if it exists
 			if (get().summary) {
-				get().loadBudgetSummary(request.user_id, request.budget_period_id);
+				get()
+					.loadBudgetSummary(request.user_id, request.budget_period_id)
+					.catch(() => {
+						// Errors are already handled in loadBudgetSummary, but this prevents unhandled rejection warnings
+					});
 			}
 
 			return newBudget;
@@ -231,7 +235,11 @@ export const useBudgetsStore = create<BudgetsStore>()((set, get) => ({
 
 			// Refresh summary if it exists
 			if (get().summary) {
-				get().loadBudgetSummary(userId, updatedBudget.budget_period_id);
+				get()
+					.loadBudgetSummary(userId, updatedBudget.budget_period_id)
+					.catch(() => {
+						// Errors are already handled in loadBudgetSummary
+					});
 			}
 
 			return updatedBudget;
@@ -266,7 +274,11 @@ export const useBudgetsStore = create<BudgetsStore>()((set, get) => ({
 
 				// Refresh summary if it exists
 				if (get().summary) {
-					get().loadBudgetSummary(userId);
+					get()
+						.loadBudgetSummary(userId)
+						.catch(() => {
+							// Errors are already handled in loadBudgetSummary
+						});
 				}
 			} else {
 				set({ loading: false });

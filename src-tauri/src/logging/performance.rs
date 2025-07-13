@@ -158,7 +158,9 @@ impl PerformanceMonitor {
 
             for (name, cmd_metrics) in &metrics.command_metrics {
                 let avg_duration = if cmd_metrics.total_calls > 0 {
-                    cmd_metrics.total_duration / cmd_metrics.total_calls as u32
+                    Duration::from_nanos(
+                        cmd_metrics.total_duration.as_nanos() as u64 / cmd_metrics.total_calls,
+                    )
                 } else {
                     Duration::ZERO
                 };
@@ -183,8 +185,10 @@ impl PerformanceMonitor {
             }
 
             let db_avg_query_time = if metrics.database_metrics.total_queries > 0 {
-                metrics.database_metrics.total_query_time
-                    / metrics.database_metrics.total_queries as u32
+                Duration::from_nanos(
+                    metrics.database_metrics.total_query_time.as_nanos() as u64
+                        / metrics.database_metrics.total_queries,
+                )
             } else {
                 Duration::ZERO
             };

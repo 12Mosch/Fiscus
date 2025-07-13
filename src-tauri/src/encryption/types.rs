@@ -245,10 +245,10 @@ impl KeyDerivationParams {
             algorithm: KeyDerivationAlgorithm::Scrypt,
             salt,
             iterations: None,
-            memory_cost: Some(1048576), // 1 MB
-            time_cost: Some(8),
-            parallelism: Some(1),
-            key_length: 32, // 256 bits
+            memory_cost: Some(8), // r parameter (block size)
+            time_cost: Some(15),  // log_n parameter (2^15 = 32768)
+            parallelism: Some(1), // p parameter
+            key_length: 32,       // 256 bits
         }
     }
 }

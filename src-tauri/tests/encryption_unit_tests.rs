@@ -224,7 +224,9 @@ fn test_key_derivation_params() {
     // Test Scrypt parameters
     let scrypt_params = KeyDerivationParams::scrypt_default(salt.clone());
     assert_eq!(scrypt_params.algorithm, KeyDerivationAlgorithm::Scrypt);
-    assert_eq!(scrypt_params.memory_cost, Some(1048576));
+    assert_eq!(scrypt_params.memory_cost, Some(8)); // r parameter (block size)
+    assert_eq!(scrypt_params.time_cost, Some(15)); // log_n parameter (2^15 = 32768)
+    assert_eq!(scrypt_params.parallelism, Some(1)); // p parameter
 }
 
 /// Test AES-GCM encryption edge cases
@@ -365,8 +367,8 @@ async fn test_key_derivation_parameters() {
     let scrypt_kdf = ScryptKdf::new().expect("Failed to create Scrypt KDF");
 
     let mut params = KeyDerivationParams::scrypt_default(salt.clone());
-    params.time_cost = Some(4);
-    params.memory_cost = Some(16);
+    params.time_cost = Some(10); // log_n = 10 (N = 2^10 = 1024)
+    params.memory_cost = Some(8); // r = 8 (block size)
 
     let key = scrypt_kdf
         .derive_key(password, &params)

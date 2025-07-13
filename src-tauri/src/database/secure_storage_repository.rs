@@ -30,32 +30,29 @@ pub struct SecureStorageRecord {
     pub last_accessed_at: Option<DateTime<Utc>>,
 }
 
-/// Test storage for mock implementation
-#[cfg(test)]
-type TestStorageType = Mutex<Option<Arc<Mutex<HashMap<String, SecureStorageRecord>>>>>;
-
-#[cfg(test)]
-static TEST_STORAGE: TestStorageType = Mutex::new(None);
-
 /// Database repository for secure storage operations
 pub struct SecureStorageRepository {
     db: Database,
+    #[cfg(test)]
+    test_storage: Option<Arc<Mutex<HashMap<String, SecureStorageRecord>>>>,
 }
 
 impl SecureStorageRepository {
     /// Create a new secure storage repository
     pub fn new(db: Database) -> Self {
-        Self { db }
+        Self {
+            db,
+            #[cfg(test)]
+            test_storage: Some(Arc::new(Mutex::new(HashMap::new()))),
+        }
     }
 
     /// Get test storage (for testing only)
     #[cfg(test)]
-    fn get_test_storage() -> Arc<Mutex<HashMap<String, SecureStorageRecord>>> {
-        let mut storage_guard = TEST_STORAGE.lock().unwrap();
-        if storage_guard.is_none() {
-            *storage_guard = Some(Arc::new(Mutex::new(HashMap::new())));
-        }
-        storage_guard.as_ref().unwrap().clone()
+    fn get_test_storage(&self) -> &Arc<Mutex<HashMap<String, SecureStorageRecord>>> {
+        self.test_storage
+            .as_ref()
+            .expect("Test storage not initialized")
     }
 
     /// Store encrypted data in the database
@@ -152,7 +149,7 @@ impl SecureStorageRepository {
                 last_accessed_at: None,
             };
 
-            let test_storage = Self::get_test_storage();
+            let test_storage = self.get_test_storage();
             {
                 let mut storage_map = test_storage.lock().unwrap();
                 storage_map.insert(storage_key.clone(), record.clone());
@@ -215,7 +212,7 @@ impl SecureStorageRepository {
         #[cfg(test)]
         let results: Vec<SecureStorageRecord> = {
             // In test mode, retrieve from test storage
-            let test_storage = Self::get_test_storage();
+            let test_storage = self.get_test_storage();
             let storage_map = test_storage.lock().unwrap();
 
             if let Some(record) = storage_map.get(&storage_key) {

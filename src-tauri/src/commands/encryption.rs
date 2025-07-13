@@ -46,7 +46,7 @@ pub fn initialize_encryption_service() -> FiscusResult<()> {
 }
 
 /// Get the encryption service instance
-fn get_encryption_service() -> FiscusResult<Arc<EncryptionService>> {
+pub fn get_encryption_service() -> FiscusResult<Arc<EncryptionService>> {
     ENCRYPTION_SERVICE
         .get()
         .cloned()

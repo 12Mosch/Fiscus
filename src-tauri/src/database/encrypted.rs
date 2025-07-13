@@ -9,7 +9,9 @@ use std::collections::HashMap;
 use tracing::{debug, error, instrument, warn};
 
 use crate::{
+    commands::encryption::get_encryption_service,
     database::{Database, DatabaseUtils},
+    encryption::types::EncryptedData,
     error::{FiscusError, FiscusResult},
 };
 
@@ -90,16 +92,116 @@ impl EncryptedDatabaseUtils {
     }
 
     /// Encrypt sensitive parameters before database insertion
+    ///
+    /// SECURITY CRITICAL: This function encrypts parameters that will be inserted into
+    /// sensitive database fields. It must not be bypassed in production.
     async fn encrypt_query_params(
         params: Vec<Value>,
-        _user_id: &str,
-        _table_name: &str,
+        user_id: &str,
+        table_name: &str,
     ) -> FiscusResult<Vec<Value>> {
-        // For now, return params as-is since we need more context about which
-        // parameters correspond to which fields. In a real implementation,
-        // this would require query parsing or parameter mapping.
-        warn!("Parameter encryption not fully implemented - requires query parsing");
-        Ok(params)
+        // PRODUCTION GUARD: Fail fast if this is called in production without proper implementation
+        #[cfg(not(debug_assertions))]
+        {
+            error!(
+                table = table_name,
+                user_id = user_id,
+                param_count = params.len(),
+                "CRITICAL SECURITY ERROR: encrypt_query_params called in production without proper parameter mapping"
+            );
+            return Err(FiscusError::Security(
+                "Parameter encryption not implemented for production use. This would expose sensitive data.".to_string()
+            ));
+        }
+
+        let encrypted_fields = Self::get_encrypted_fields(table_name);
+
+        // If no fields need encryption for this table, return params as-is
+        if encrypted_fields.is_empty() {
+            debug!(
+                table = table_name,
+                "No encrypted fields configured for table, returning parameters unchanged"
+            );
+            return Ok(params);
+        }
+
+        // FAIL-FAST: If we have encrypted fields but no proper mapping strategy,
+        // we must not allow potentially sensitive data to pass through unencrypted
+        error!(
+            table = table_name,
+            user_id = user_id,
+            encrypted_fields = ?encrypted_fields,
+            param_count = params.len(),
+            "SECURITY VIOLATION: Cannot safely encrypt parameters without field mapping. Sensitive data may be exposed."
+        );
+
+        // In development, log the issue but continue with a warning
+        #[cfg(debug_assertions)]
+        {
+            warn!(
+                "DEVELOPMENT MODE: Parameter encryption not fully implemented. Use encrypt_record() for structured data operations."
+            );
+            return Ok(params);
+        }
+    }
+
+    /// Encrypt parameters with explicit field mapping (RECOMMENDED APPROACH)
+    ///
+    /// This function provides a safer alternative to encrypt_query_params by requiring
+    /// explicit mapping of parameters to field names, preventing accidental exposure
+    /// of sensitive data.
+    ///
+    /// # Arguments
+    /// * `params` - Parameters with their corresponding field names
+    /// * `user_id` - User ID for key derivation
+    /// * `table_name` - Table name for encryption field lookup
+    ///
+    /// # Returns
+    /// * `FiscusResult<Vec<Value>>` - Encrypted parameters in the same order
+    pub async fn encrypt_params_with_mapping(
+        params: Vec<(String, Value)>, // (field_name, value) pairs
+        user_id: &str,
+        table_name: &str,
+    ) -> FiscusResult<Vec<Value>> {
+        debug!(
+            table = table_name,
+            user_id = user_id,
+            param_count = params.len(),
+            "Encrypting parameters with explicit field mapping"
+        );
+
+        let mut encrypted_params = Vec::with_capacity(params.len());
+
+        for (field_name, value) in params {
+            let encrypted_value = if Self::is_field_encrypted(table_name, &field_name) {
+                // Encrypt sensitive field
+                if let Some(string_value) = value.as_str() {
+                    let encrypted =
+                        Self::encrypt_field_value(string_value, user_id, &field_name).await?;
+                    Value::String(encrypted)
+                } else {
+                    warn!(
+                        field = field_name,
+                        table = table_name,
+                        "Non-string value in encrypted field, passing through unchanged"
+                    );
+                    value
+                }
+            } else {
+                // Non-sensitive field, pass through unchanged
+                value
+            };
+
+            encrypted_params.push(encrypted_value);
+        }
+
+        debug!(
+            table = table_name,
+            encrypted_count = encrypted_params.len(),
+            "Parameters encrypted successfully with field mapping"
+        );
+
+        Ok(encrypted_params)
     }
 
     /// Decrypt sensitive fields in query results
@@ -161,7 +263,7 @@ impl EncryptedDatabaseUtils {
         Ok(decrypted_results)
     }
 
-    /// Encrypt a field value for storage
+    /// Encrypt a field value for storage using AES-256-GCM
     pub async fn encrypt_field_value(
         value: &str,
         user_id: &str,
@@ -170,25 +272,42 @@ impl EncryptedDatabaseUtils {
         debug!(
             field = field_name,
             user_id = user_id,
-            "Encrypting field value"
+            "Encrypting field value with AES-256-GCM"
         );
 
-        // This is a simplified implementation. In production, you'd want to:
-        // 1. Initialize the encryption service properly
-        // 2. Use proper key derivation for the user
-        // 3. Handle different data types appropriately
+        // Get the global encryption service
+        let encryption_service = get_encryption_service().map_err(|e| {
+            error!("Failed to get encryption service: {}", e);
+            FiscusError::Encryption("Encryption service not available".to_string())
+        })?;
 
-        // For now, return a placeholder encrypted value
-        let placeholder_encrypted = format!(
-            "enc:{}",
-            base64::engine::general_purpose::STANDARD.encode(value.as_bytes())
+        // Encrypt the field value using AES-256-GCM with user-specific key derivation
+        let encrypted_data = encryption_service
+            .encrypt_financial_data(value.as_bytes(), user_id, field_name)
+            .await
+            .map_err(|e| {
+                error!("Failed to encrypt field value: {}", e);
+                FiscusError::Encryption(format!("Field encryption failed: {e}"))
+            })?;
+
+        // Serialize the encrypted data to JSON and base64 encode for storage
+        let serialized = serde_json::to_string(&encrypted_data).map_err(|e| {
+            error!("Failed to serialize encrypted data: {}", e);
+            FiscusError::Encryption(format!("Failed to serialize encrypted data: {e}"))
+        })?;
+
+        let encoded = base64::engine::general_purpose::STANDARD.encode(serialized.as_bytes());
+        let result = format!("enc:{encoded}");
+
+        debug!(
+            field = field_name,
+            user_id = user_id,
+            "Field value encrypted successfully with AES-256-GCM"
         );
-
-        warn!("Field encryption using placeholder implementation");
-        Ok(placeholder_encrypted)
+        Ok(result)
     }
 
-    /// Decrypt a field value from storage
+    /// Decrypt a field value from storage using AES-256-GCM
     pub async fn decrypt_field_value(
         encrypted_value: &str,
         user_id: &str,
@@ -197,26 +316,60 @@ impl EncryptedDatabaseUtils {
         debug!(
             field = field_name,
             user_id = user_id,
-            "Decrypting field value"
+            "Decrypting field value with AES-256-GCM"
         );
 
         // Remove the "enc:" prefix and decode
         if let Some(base64_data) = encrypted_value.strip_prefix("enc:") {
+            // Decode the base64 data
             let decoded_bytes = base64::engine::general_purpose::STANDARD
                 .decode(base64_data)
                 .map_err(|e| {
+                    error!("Failed to decode base64 encrypted field: {}", e);
                     FiscusError::Encryption(format!("Failed to decode encrypted field: {e}"))
                 })?;
 
-            let decrypted_value = String::from_utf8(decoded_bytes).map_err(|e| {
+            // Deserialize the JSON to EncryptedData
+            let serialized_data = String::from_utf8(decoded_bytes).map_err(|e| {
+                error!("Invalid UTF-8 in serialized encrypted data: {}", e);
+                FiscusError::Encryption(format!("Invalid UTF-8 in encrypted field: {e}"))
+            })?;
+
+            let encrypted_data: EncryptedData =
+                serde_json::from_str(&serialized_data).map_err(|e| {
+                    error!("Failed to deserialize encrypted data: {}", e);
+                    FiscusError::Encryption(format!("Failed to deserialize encrypted data: {e}"))
+                })?;
+
+            // Get the global encryption service
+            let encryption_service = get_encryption_service().map_err(|e| {
+                error!("Failed to get encryption service: {}", e);
+                FiscusError::Encryption("Encryption service not available".to_string())
+            })?;
+
+            // Decrypt the data using AES-256-GCM
+            let decrypted_bytes = encryption_service
+                .decrypt_financial_data(&encrypted_data, user_id, field_name)
+                .await
+                .map_err(|e| {
+                    error!("Failed to decrypt field value: {}", e);
+                    FiscusError::Encryption(format!("Field decryption failed: {e}"))
+                })?;
+
+            let decrypted_value = String::from_utf8(decrypted_bytes).map_err(|e| {
+                error!("Invalid UTF-8 in decrypted field value: {}", e);
                 FiscusError::Encryption(format!("Invalid UTF-8 in decrypted field: {e}"))
             })?;
 
-            debug!(field = field_name, "Field value decrypted successfully");
+            debug!(
+                field = field_name,
+                user_id = user_id,
+                "Field value decrypted successfully with AES-256-GCM"
+            );
             Ok(decrypted_value)
         } else {
             Err(FiscusError::Encryption(
-                "Invalid encrypted field format".to_string(),
+                "Invalid encrypted field format - missing 'enc:' prefix".to_string(),
             ))
         }
     }
@@ -297,6 +450,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_field_encryption_roundtrip() {
+        // Initialize the encryption service for testing
+        crate::commands::encryption::initialize_encryption_service()
+            .expect("Failed to initialize encryption service for test");
+
         let original_value = "sensitive data";
         let user_id = "test-user";
         let field_name = "test_field";
@@ -315,6 +472,80 @@ mod tests {
                 .unwrap();
 
         assert_eq!(decrypted, original_value);
+    }
+
+    #[tokio::test]
+    async fn test_encrypt_params_with_mapping() {
+        // Initialize the encryption service for testing
+        crate::commands::encryption::initialize_encryption_service()
+            .expect("Failed to initialize encryption service for test");
+
+        let params = vec![
+            ("id".to_string(), Value::String("123".to_string())),
+            ("amount".to_string(), Value::String("100.50".to_string())),
+            (
+                "description".to_string(),
+                Value::String("Test transaction".to_string()),
+            ),
+            ("category".to_string(), Value::String("food".to_string())),
+        ];
+
+        let user_id = "test-user";
+        let table_name = "transactions";
+
+        let encrypted_params = EncryptedDatabaseUtils::encrypt_params_with_mapping(
+            params.clone(),
+            user_id,
+            table_name,
+        )
+        .await
+        .unwrap();
+
+        // Should have same number of parameters
+        assert_eq!(encrypted_params.len(), 4);
+
+        // Non-encrypted fields should be unchanged
+        assert_eq!(encrypted_params[0], Value::String("123".to_string())); // id
+        assert_eq!(encrypted_params[3], Value::String("food".to_string())); // category
+
+        // Encrypted fields should be different and start with "enc:"
+        if let Value::String(encrypted_amount) = &encrypted_params[1] {
+            assert!(encrypted_amount.starts_with("enc:"));
+            assert_ne!(encrypted_amount, "100.50");
+        } else {
+            panic!("Expected encrypted amount to be a string");
+        }
+
+        if let Value::String(encrypted_desc) = &encrypted_params[2] {
+            assert!(encrypted_desc.starts_with("enc:"));
+            assert_ne!(encrypted_desc, "Test transaction");
+        } else {
+            panic!("Expected encrypted description to be a string");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_encrypt_query_params_security_guard() {
+        let params = vec![Value::String("sensitive_data".to_string())];
+        let user_id = "test-user";
+        let table_name = "transactions"; // Has encrypted fields
+
+        // In debug mode, this should return params with a warning
+        #[cfg(debug_assertions)]
+        {
+            let result =
+                EncryptedDatabaseUtils::encrypt_query_params(params, user_id, table_name).await;
+            assert!(result.is_ok());
+        }
+
+        // Test with table that has no encrypted fields
+        let result = EncryptedDatabaseUtils::encrypt_query_params(
+            vec![Value::String("data".to_string())],
+            user_id,
+            "non_encrypted_table",
+        )
+        .await;
+        assert!(result.is_ok());
     }
 
     #[test]

@@ -300,7 +300,12 @@ export function useEncryptionStats() {
 
 		const doFetch = async () => {
 			if (mounted) {
-				await fetchStats();
+				try {
+					await fetchStats();
+				} catch (error) {
+					// This catch prevents unhandled promise rejection
+					console.debug("Auto-fetch failed:", error);
+				}
 			}
 		};
 

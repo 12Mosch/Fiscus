@@ -10,6 +10,7 @@ mod logging;
 mod models;
 pub mod security;
 mod services;
+pub mod utils;
 
 #[cfg(test)]
 mod test_utils;
@@ -23,6 +24,7 @@ pub use dto::*;
 pub use error::*;
 pub use logging::*;
 pub use models::*;
+pub use utils::*;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

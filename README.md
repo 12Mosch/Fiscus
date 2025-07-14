@@ -102,13 +102,24 @@ For migration guidance, see [Security Migration Guide](docs/security-migration-g
 src/
 ├── components/          # React components
 ├── assets/             # Static assets
+├── lib/                # Library code
+│   ├── api-service/    # Secure API service
+│   └── database/       # Database hooks
 ├── App.tsx             # Main React application
 ├── main.tsx            # React entry point
 └── styles.css          # Global styles
 
 src-tauri/              # Rust backend
+├── src/
+│   ├── commands/       # Domain-specific command modules
+│   ├── database/       # Database utilities
+│   ├── encryption/     # Encryption services
+│   └── ...
 docs/                   # Documentation
 ├── react-integration.md # React setup guide
+├── api-reference.md    # API documentation
+├── security-migration-guide.md # Migration guide
+└── ...
 ```
 
 ## Documentation

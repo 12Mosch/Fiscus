@@ -243,6 +243,30 @@ static EMAIL_REGEX: Lazy<Regex> = Lazy::new(|| {
         .expect("Failed to compile email regex - this should never happen")
 });
 
+/// Lazy static regex for currency code validation - compiled once for better performance
+static CURRENCY_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^[A-Z]{3}$").expect("Failed to compile currency regex - this should never happen")
+});
+
+/// ISO 4217 currency codes - comprehensive list of commonly supported currencies
+static VALID_CURRENCY_CODES: Lazy<std::collections::HashSet<&'static str>> = Lazy::new(|| {
+    [
+        // Major currencies
+        "USD", "EUR", "GBP", "JPY", "CHF", "CAD", "AUD", "NZD", // Asian currencies
+        "CNY", "HKD", "SGD", "KRW", "INR", "THB", "MYR", "IDR", "PHP", "VND",
+        // European currencies
+        "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK",
+        // Middle Eastern currencies
+        "AED", "SAR", "QAR", "KWD", "BHD", "OMR", "JOD", "ILS", // African currencies
+        "ZAR", "EGP", "NGN", "KES", "GHS", "MAD", "TND", // Latin American currencies
+        "BRL", "MXN", "ARS", "CLP", "COP", "PEN", "UYU", // Other important currencies
+        "RUB", "TRY", "PKR", "BDT", "LKR", "NPR", "MMK",
+    ]
+    .iter()
+    .copied()
+    .collect()
+});
+
 /// Validation utilities
 pub struct Validator;
 
@@ -326,6 +350,164 @@ impl Validator {
             .map_err(|_| {
                 FiscusError::Validation("Invalid datetime format. Expected RFC3339".to_string())
             })
+    }
+
+    /// Validate currency code according to ISO 4217 standard
+    /// Ensures the currency code is a 3-letter uppercase code and is in the supported list
+    pub fn validate_currency_code(currency: &str) -> FiscusResult<()> {
+        // Check if empty or whitespace
+        if currency.trim().is_empty() {
+            return Err(FiscusError::Validation(
+                "Currency code cannot be empty".to_string(),
+            ));
+        }
+
+        // Normalize to uppercase for validation
+        let currency_upper = currency.trim().to_uppercase();
+
+        // Check format (3 uppercase letters)
+        if !CURRENCY_REGEX.is_match(&currency_upper) {
+            return Err(FiscusError::Validation(
+                "Currency code must be exactly 3 uppercase letters (e.g., USD, EUR, GBP)"
+                    .to_string(),
+            ));
+        }
+
+        // Check if currency is supported
+        if !VALID_CURRENCY_CODES.contains(currency_upper.as_str()) {
+            return Err(FiscusError::Validation(format!(
+                "Unsupported currency code: {currency_upper}. Please use a valid ISO 4217 currency code"
+            )));
+        }
+
+        Ok(())
+    }
+
+    /// Validate user ID format and content
+    /// Ensures the user ID is a valid UUID format and not empty
+    pub fn validate_user_id(user_id: &str) -> FiscusResult<uuid::Uuid> {
+        // Check if empty or whitespace
+        if user_id.trim().is_empty() {
+            return Err(FiscusError::Validation(
+                "User ID cannot be empty".to_string(),
+            ));
+        }
+
+        // Validate UUID format and return the parsed UUID
+        Self::validate_uuid(user_id, "user ID")
+    }
+}
+
+/// Validated wrapper type for user IDs
+/// Ensures user IDs are valid UUIDs and not empty
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ValidatedUserId(uuid::Uuid);
+
+impl ValidatedUserId {
+    /// Create a new ValidatedUserId from a string
+    pub fn new(user_id: &str) -> FiscusResult<Self> {
+        let uuid = Validator::validate_user_id(user_id)?;
+        Ok(Self(uuid))
+    }
+
+    /// Get the inner UUID value
+    pub fn as_uuid(&self) -> uuid::Uuid {
+        self.0
+    }
+
+    /// Get the string representation
+    pub fn as_str(&self) -> String {
+        self.0.to_string()
+    }
+
+    /// Check if the user ID is empty (always false for valid UUIDs)
+    pub fn is_empty(&self) -> bool {
+        false
+    }
+}
+
+impl std::fmt::Display for ValidatedUserId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::str::FromStr for ValidatedUserId {
+    type Err = FiscusError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::new(s)
+    }
+}
+
+impl serde::Serialize for ValidatedUserId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.0.to_string())
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for ValidatedUserId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Self::new(&s).map_err(serde::de::Error::custom)
+    }
+}
+
+/// Validated wrapper type for currency codes
+/// Ensures currency codes follow ISO 4217 standard
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ValidatedCurrency(String);
+
+impl ValidatedCurrency {
+    /// Create a new ValidatedCurrency from a string
+    pub fn new(currency: &str) -> FiscusResult<Self> {
+        let currency_upper = currency.trim().to_uppercase();
+        Validator::validate_currency_code(&currency_upper)?;
+        Ok(Self(currency_upper))
+    }
+
+    /// Get the currency code as a string
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for ValidatedCurrency {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::str::FromStr for ValidatedCurrency {
+    type Err = FiscusError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::new(s)
+    }
+}
+
+impl serde::Serialize for ValidatedCurrency {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.0)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for ValidatedCurrency {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Self::new(&s).map_err(serde::de::Error::custom)
     }
 }
 
@@ -862,6 +1044,110 @@ mod tests {
                     "Should reject malicious direction: {direction}"
                 );
             }
+        }
+
+        #[test]
+        fn test_validate_currency_code() {
+            // Valid currency codes
+            assert!(Validator::validate_currency_code("USD").is_ok());
+            assert!(Validator::validate_currency_code("EUR").is_ok());
+            assert!(Validator::validate_currency_code("GBP").is_ok());
+            assert!(Validator::validate_currency_code("JPY").is_ok());
+            assert!(Validator::validate_currency_code("CAD").is_ok());
+
+            // Invalid currency codes - empty/whitespace
+            assert!(Validator::validate_currency_code("").is_err());
+            assert!(Validator::validate_currency_code("   ").is_err());
+
+            // Invalid currency codes - wrong format
+            assert!(Validator::validate_currency_code("us").is_err()); // too short
+            assert!(Validator::validate_currency_code("USDD").is_err()); // too long
+            assert!(Validator::validate_currency_code("US1").is_err()); // contains number
+            assert!(Validator::validate_currency_code("U$D").is_err()); // contains symbol
+
+            // Valid currency codes - case normalization should work
+            assert!(Validator::validate_currency_code("usd").is_ok()); // lowercase normalized to uppercase
+            assert!(Validator::validate_currency_code("eur").is_ok()); // lowercase normalized to uppercase
+
+            // Invalid currency codes - unsupported
+            assert!(Validator::validate_currency_code("XXX").is_err());
+            assert!(Validator::validate_currency_code("ABC").is_err());
+            assert!(Validator::validate_currency_code("ZZZ").is_err());
+        }
+
+        #[test]
+        fn test_validate_user_id() {
+            // Valid UUIDs
+            assert!(Validator::validate_user_id("550e8400-e29b-41d4-a716-446655440000").is_ok());
+            assert!(Validator::validate_user_id("6ba7b810-9dad-11d1-80b4-00c04fd430c8").is_ok());
+            assert!(Validator::validate_user_id("6ba7b811-9dad-11d1-80b4-00c04fd430c8").is_ok());
+
+            // Invalid user IDs - empty/whitespace
+            assert!(Validator::validate_user_id("").is_err());
+            assert!(Validator::validate_user_id("   ").is_err());
+
+            // Invalid user IDs - wrong format
+            assert!(Validator::validate_user_id("not-a-uuid").is_err());
+            assert!(Validator::validate_user_id("550e8400-e29b-41d4-a716").is_err()); // too short
+            assert!(
+                Validator::validate_user_id("550e8400-e29b-41d4-a716-446655440000-extra").is_err()
+            ); // too long
+            assert!(Validator::validate_user_id("550e8400-e29b-41d4-a716-44665544000g").is_err());
+            // invalid character
+            assert!(Validator::validate_user_id("xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx").is_err());
+            // invalid hex characters
+        }
+
+        #[test]
+        fn test_validated_user_id() {
+            // Valid creation
+            let valid_uuid = "550e8400-e29b-41d4-a716-446655440000";
+            let user_id = ValidatedUserId::new(valid_uuid).unwrap();
+            assert_eq!(user_id.as_str(), valid_uuid);
+            assert_eq!(user_id.to_string(), valid_uuid);
+
+            // Invalid creation
+            assert!(ValidatedUserId::new("").is_err());
+            assert!(ValidatedUserId::new("not-a-uuid").is_err());
+            assert!(ValidatedUserId::new("550e8400-e29b-41d4-a716").is_err());
+
+            // Serialization/Deserialization
+            let user_id = ValidatedUserId::new(valid_uuid).unwrap();
+            let serialized = serde_json::to_string(&user_id).unwrap();
+            let deserialized: ValidatedUserId = serde_json::from_str(&serialized).unwrap();
+            assert_eq!(user_id, deserialized);
+
+            // FromStr trait
+            let user_id_from_str: ValidatedUserId = valid_uuid.parse().unwrap();
+            assert_eq!(user_id_from_str.as_str(), valid_uuid);
+        }
+
+        #[test]
+        fn test_validated_currency() {
+            // Valid creation
+            let currency = ValidatedCurrency::new("USD").unwrap();
+            assert_eq!(currency.as_str(), "USD");
+            assert_eq!(currency.to_string(), "USD");
+
+            // Case normalization
+            let currency_lower = ValidatedCurrency::new("usd").unwrap();
+            assert_eq!(currency_lower.as_str(), "USD");
+
+            // Invalid creation
+            assert!(ValidatedCurrency::new("").is_err());
+            assert!(ValidatedCurrency::new("us").is_err());
+            assert!(ValidatedCurrency::new("USDD").is_err());
+            assert!(ValidatedCurrency::new("XXX").is_err());
+
+            // Serialization/Deserialization
+            let currency = ValidatedCurrency::new("EUR").unwrap();
+            let serialized = serde_json::to_string(&currency).unwrap();
+            let deserialized: ValidatedCurrency = serde_json::from_str(&serialized).unwrap();
+            assert_eq!(currency, deserialized);
+
+            // FromStr trait
+            let currency_from_str: ValidatedCurrency = "GBP".parse().unwrap();
+            assert_eq!(currency_from_str.as_str(), "GBP");
         }
     }
 }

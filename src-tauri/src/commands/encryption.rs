@@ -60,7 +60,7 @@ pub async fn encrypt_financial_data(
     request: EncryptDataRequest,
 ) -> FiscusResult<EncryptDataResponse> {
     // Validate input
-    Validator::validate_uuid(&request.user_id, "user_id")?;
+    Validator::validate_uuid(&request.user_id.as_str(), "user_id")?;
     Validator::validate_string(&request.data_type, "data_type", 1, 100)?;
 
     if request.data.is_empty() {
@@ -88,7 +88,7 @@ pub async fn encrypt_financial_data(
 
     // Encrypt the data
     let encrypted_data = service
-        .encrypt_financial_data(&data_bytes, &request.user_id, &request.data_type)
+        .encrypt_financial_data(&data_bytes, &request.user_id.as_str(), &request.data_type)
         .await?;
 
     // Convert encrypted data to base64 for transport
@@ -118,7 +118,7 @@ pub async fn decrypt_financial_data(
     request: DecryptDataRequest,
 ) -> FiscusResult<DecryptDataResponse> {
     // Validate input
-    Validator::validate_uuid(&request.user_id, "user_id")?;
+    Validator::validate_uuid(&request.user_id.as_str(), "user_id")?;
     Validator::validate_string(&request.data_type, "data_type", 1, 100)?;
 
     let service = get_encryption_service()?;
@@ -152,7 +152,11 @@ pub async fn decrypt_financial_data(
 
     // Decrypt the data
     let decrypted_bytes = service
-        .decrypt_financial_data(&encrypted_data, &request.user_id, &request.data_type)
+        .decrypt_financial_data(
+            &encrypted_data,
+            &request.user_id.as_str(),
+            &request.data_type,
+        )
         .await?;
 
     // Convert decrypted data to base64 for transport
@@ -178,7 +182,7 @@ pub async fn generate_encryption_key(
     request: GenerateKeyRequest,
 ) -> FiscusResult<GenerateKeyResponse> {
     // Validate input
-    Validator::validate_uuid(&request.user_id, "user_id")?;
+    Validator::validate_uuid(&request.user_id.as_str(), "user_id")?;
 
     let _service = get_encryption_service()?;
 
@@ -229,14 +233,14 @@ pub async fn generate_encryption_key(
 #[instrument(skip(request), fields(user_id = %request.user_id))]
 pub async fn rotate_user_keys(request: RotateKeysRequest) -> FiscusResult<bool> {
     // Validate input
-    Validator::validate_uuid(&request.user_id, "user_id")?;
+    Validator::validate_uuid(&request.user_id.as_str(), "user_id")?;
 
     let service = get_encryption_service()?;
 
     info!(user_id = %request.user_id, "Starting key rotation");
 
     // Rotate keys
-    service.rotate_user_keys(&request.user_id).await?;
+    service.rotate_user_keys(&request.user_id.as_str()).await?;
 
     info!(user_id = %request.user_id, "Key rotation completed successfully");
     Ok(true)

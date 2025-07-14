@@ -132,6 +132,12 @@ pub struct EncryptionKey {
     pub expires_at: Option<DateTime<Utc>>,
     /// Whether this key is active
     pub is_active: bool,
+    /// Number of encryption operations performed with this key
+    pub encryption_count: u64,
+    /// Maximum number of encryptions before rotation is required
+    pub max_encryptions: Option<u64>,
+    /// Total volume of data encrypted with this key (in bytes)
+    pub data_volume: u64,
 }
 
 /// Secure byte container that zeros memory on drop
@@ -269,6 +275,31 @@ impl EncryptionKey {
             created_at: Utc::now(),
             expires_at: None,
             is_active: true,
+            encryption_count: 0,
+            max_encryptions: None,
+            data_volume: 0,
+        }
+    }
+
+    /// Create a new encryption key with rotation settings
+    pub fn with_rotation_policy(
+        key_data: Vec<u8>,
+        key_type: KeyType,
+        algorithm: EncryptionAlgorithm,
+        key_id: String,
+        max_encryptions: Option<u64>,
+    ) -> Self {
+        Self {
+            key_data: SecureBytes::new(key_data),
+            key_type,
+            algorithm,
+            key_id,
+            created_at: Utc::now(),
+            expires_at: None,
+            is_active: true,
+            encryption_count: 0,
+            max_encryptions,
+            data_volume: 0,
         }
     }
 
@@ -281,14 +312,43 @@ impl EncryptionKey {
         }
     }
 
-    /// Check if the key is valid (active and not expired)
+    /// Check if the key needs rotation based on usage
+    pub fn needs_rotation(&self) -> bool {
+        if let Some(max_encryptions) = self.max_encryptions {
+            self.encryption_count >= max_encryptions
+        } else {
+            false
+        }
+    }
+
+    /// Check if the key is valid (active, not expired, and doesn't need rotation)
     pub fn is_valid(&self) -> bool {
-        self.is_active && !self.is_expired()
+        self.is_active && !self.is_expired() && !self.needs_rotation()
+    }
+
+    /// Increment encryption count and data volume
+    pub fn record_encryption(&mut self, data_size: usize) {
+        self.encryption_count += 1;
+        self.data_volume += data_size as u64;
     }
 
     /// Get the key data as bytes
     pub fn key_bytes(&self) -> &[u8] {
         self.key_data.as_slice()
+    }
+
+    /// Get the key age
+    pub fn age(&self) -> chrono::Duration {
+        Utc::now() - self.created_at
+    }
+
+    /// Check if key is approaching rotation threshold (at 75% of max encryptions)
+    pub fn approaching_rotation(&self) -> bool {
+        if let Some(max_encryptions) = self.max_encryptions {
+            self.encryption_count >= (max_encryptions * 3) / 4
+        } else {
+            false
+        }
     }
 }
 

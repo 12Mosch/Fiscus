@@ -1,9 +1,9 @@
-use async_trait::async_trait;
-use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 /// Asymmetric encryption implementations for the Fiscus encryption service
 ///
 /// This module provides asymmetric (public-key) encryption capabilities using
 /// RSA-4096 and Ed25519 algorithms for secure key exchange and digital signatures.
+use async_trait::async_trait;
+use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use rsa::{
     pkcs8::{DecodePrivateKey, DecodePublicKey, EncodePrivateKey, EncodePublicKey},
     Pkcs1v15Encrypt, RsaPrivateKey, RsaPublicKey,
@@ -14,7 +14,6 @@ use super::types::{
     EncryptedData, EncryptionAlgorithm, EncryptionKey, EncryptionMetadata, EncryptionResult,
     KeyType,
 };
-use super::utils::SecureRandom;
 use crate::error::FiscusError;
 
 /// Trait for asymmetric encryption operations
@@ -61,18 +60,13 @@ pub trait AsymmetricEncryption {
 /// RSA with 4096-bit keys provides strong security for key exchange and
 /// digital signatures, though it's slower than elliptic curve alternatives.
 #[derive(Debug)]
-pub struct RsaEncryption {
-    #[allow(dead_code)]
-    secure_random: SecureRandom,
-}
+pub struct RsaEncryption {}
 
 impl RsaEncryption {
     /// Create a new RSA encryption instance
     pub fn new() -> EncryptionResult<Self> {
         debug!("Initializing RSA-4096 encryption");
-        Ok(Self {
-            secure_random: SecureRandom::new()?,
-        })
+        Ok(Self {})
     }
 
     /// Convert RSA public key to PEM format
@@ -267,18 +261,13 @@ impl AsymmetricEncryption for RsaEncryption {
 /// Ed25519 provides fast, secure digital signatures and key exchange
 /// using elliptic curve cryptography.
 #[derive(Debug)]
-pub struct Ed25519Encryption {
-    #[allow(dead_code)]
-    secure_random: SecureRandom,
-}
+pub struct Ed25519Encryption {}
 
 impl Ed25519Encryption {
     /// Create a new Ed25519 encryption instance
     pub fn new() -> EncryptionResult<Self> {
         debug!("Initializing Ed25519 encryption");
-        Ok(Self {
-            secure_random: SecureRandom::new()?,
-        })
+        Ok(Self {})
     }
 }
 

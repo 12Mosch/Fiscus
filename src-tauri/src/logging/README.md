@@ -33,7 +33,7 @@ async fn my_command() -> Result<String, FiscusError> {
 
 ## Architecture
 
-```
+```text
 src/logging/
 ├── mod.rs              # Main module exports
 ├── config.rs           # Configuration and initialization

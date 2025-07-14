@@ -214,10 +214,10 @@ impl KeyDerivation for Pbkdf2Kdf {
             ));
         }
 
-        let iterations = params.iterations.unwrap_or(100_000);
+        let iterations = params.iterations.unwrap_or(120_000);
 
-        if iterations < 10_000 {
-            warn!("PBKDF2 iteration count is low: {}", iterations);
+        if iterations < 120_000 {
+            warn!("PBKDF2 iteration count is below NIST recommendation (120,000): {}", iterations);
         }
 
         let mut output = vec![0u8; params.key_length];

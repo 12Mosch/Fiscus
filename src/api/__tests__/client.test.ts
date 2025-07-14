@@ -26,6 +26,7 @@ describe("FiscusApiClient", () => {
 		describe("createUser", () => {
 			it("should create a user successfully", async () => {
 				const request: CreateUserRequest = {
+					// file deepcode ignore NoHardcodedCredentials/test: <test>
 					// file deepcode ignore NoHardcodedPasswords/test: <test>
 					username: "testuser",
 					email: "test@example.com",

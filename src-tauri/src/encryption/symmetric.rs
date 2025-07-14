@@ -10,6 +10,7 @@ use async_trait::async_trait;
 use chacha20poly1305::{ChaCha20Poly1305, Key as ChaChaKey, Nonce as ChaChaNonce};
 use tracing::{debug, error, instrument};
 
+use super::nonce_manager::NonceManager;
 use super::types::{
     EncryptedData, EncryptionAlgorithm, EncryptionKey, EncryptionMetadata, EncryptionResult,
 };
@@ -44,6 +45,7 @@ pub trait SymmetricEncryption {
 #[derive(Debug)]
 pub struct AesGcmEncryption {
     secure_random: std::sync::Mutex<SecureRandom>,
+    nonce_manager: NonceManager,
 }
 
 impl AesGcmEncryption {
@@ -52,6 +54,16 @@ impl AesGcmEncryption {
         debug!("Initializing AES-256-GCM encryption");
         Ok(Self {
             secure_random: std::sync::Mutex::new(SecureRandom::new()?),
+            nonce_manager: NonceManager::new()?,
+        })
+    }
+
+    /// Create a new AES-GCM encryption instance with custom nonce manager
+    pub fn with_nonce_manager(nonce_manager: NonceManager) -> EncryptionResult<Self> {
+        debug!("Initializing AES-256-GCM encryption with custom nonce manager");
+        Ok(Self {
+            secure_random: std::sync::Mutex::new(SecureRandom::new()?),
+            nonce_manager,
         })
     }
 
@@ -80,8 +92,11 @@ impl AesGcmEncryption {
         let key_array = Key::<Aes256Gcm>::from_slice(key.key_bytes());
         let cipher = Aes256Gcm::new(key_array);
 
-        // Generate random nonce
-        let nonce_bytes = self.secure_random.lock().unwrap().generate_bytes(12)?; // 96-bit nonce for GCM
+        // Generate nonce using nonce manager (supports both random and counter-based)
+        let nonce_bytes = self
+            .nonce_manager
+            .generate_nonce(&key.key_id, EncryptionAlgorithm::Aes256Gcm, None)
+            .await?;
         let nonce = Nonce::from_slice(&nonce_bytes);
 
         // Perform encryption
@@ -228,6 +243,7 @@ impl SymmetricEncryption for AesGcmEncryption {
 #[derive(Debug)]
 pub struct ChaCha20Poly1305Encryption {
     secure_random: std::sync::Mutex<SecureRandom>,
+    nonce_manager: NonceManager,
 }
 
 impl ChaCha20Poly1305Encryption {
@@ -236,6 +252,16 @@ impl ChaCha20Poly1305Encryption {
         debug!("Initializing ChaCha20-Poly1305 encryption");
         Ok(Self {
             secure_random: std::sync::Mutex::new(SecureRandom::new()?),
+            nonce_manager: NonceManager::new()?,
+        })
+    }
+
+    /// Create a new ChaCha20-Poly1305 encryption instance with custom nonce manager
+    pub fn with_nonce_manager(nonce_manager: NonceManager) -> EncryptionResult<Self> {
+        debug!("Initializing ChaCha20-Poly1305 encryption with custom nonce manager");
+        Ok(Self {
+            secure_random: std::sync::Mutex::new(SecureRandom::new()?),
+            nonce_manager,
         })
     }
 }
@@ -261,8 +287,11 @@ impl SymmetricEncryption for ChaCha20Poly1305Encryption {
         let key_array = ChaChaKey::from_slice(key.key_bytes());
         let cipher = ChaCha20Poly1305::new(key_array);
 
-        // Generate random nonce
-        let nonce_bytes = self.secure_random.lock().unwrap().generate_bytes(12)?; // 96-bit nonce
+        // Generate nonce using nonce manager (supports both random and counter-based)
+        let nonce_bytes = self
+            .nonce_manager
+            .generate_nonce(&key.key_id, EncryptionAlgorithm::ChaCha20Poly1305, None)
+            .await?;
         let nonce = ChaChaNonce::from_slice(&nonce_bytes);
 
         // Perform encryption
@@ -387,5 +416,78 @@ mod tests {
         let decrypted = encryption.decrypt_with_aad(&encrypted, &key).await.unwrap();
 
         assert_eq!(data, decrypted.as_slice());
+    }
+
+    #[tokio::test]
+    async fn test_nonce_reuse_prevention() {
+        use crate::encryption::nonce_manager::{NonceConfig, NonceManager, NonceStrategy};
+        use std::collections::HashSet;
+
+        // Create encryption with counter-based nonce strategy
+        let config = NonceConfig {
+            default_strategy: NonceStrategy::CounterBased,
+            rotation_threshold: 1000,
+            warning_threshold: 800,
+            persist_counters: false,
+        };
+        let nonce_manager = NonceManager::with_config(config).unwrap();
+        let encryption = AesGcmEncryption::with_nonce_manager(nonce_manager).unwrap();
+        let key = encryption.generate_key().await.unwrap();
+
+        let mut nonces = HashSet::new();
+        let data = b"test data for nonce uniqueness";
+
+        // Encrypt 100 times and verify all nonces are unique
+        for _ in 0..100 {
+            let encrypted = encryption.encrypt(data, &key).await.unwrap();
+            assert!(
+                nonces.insert(encrypted.nonce.clone()),
+                "Duplicate nonce detected!"
+            );
+
+            // Verify we can decrypt
+            let decrypted = encryption.decrypt(&encrypted, &key).await.unwrap();
+            assert_eq!(data, decrypted.as_slice());
+        }
+
+        // Verify we have 100 unique nonces
+        assert_eq!(nonces.len(), 100);
+    }
+
+    #[tokio::test]
+    async fn test_rotation_threshold_enforcement() {
+        use crate::encryption::nonce_manager::{NonceConfig, NonceManager, NonceStrategy};
+
+        // Create encryption with very low rotation threshold for testing
+        let config = NonceConfig {
+            default_strategy: NonceStrategy::CounterBased,
+            rotation_threshold: 3,
+            warning_threshold: 2,
+            persist_counters: false,
+        };
+        let nonce_manager = NonceManager::with_config(config).unwrap();
+        let encryption = AesGcmEncryption::with_nonce_manager(nonce_manager).unwrap();
+        let key = encryption.generate_key().await.unwrap();
+
+        let data = b"test data";
+
+        // First 3 encryptions should work
+        for _ in 0..3 {
+            let result = encryption.encrypt(data, &key).await;
+            assert!(result.is_ok(), "Encryption should succeed before threshold");
+        }
+
+        // 4th encryption should fail due to rotation threshold
+        let result = encryption.encrypt(data, &key).await;
+        assert!(
+            result.is_err(),
+            "Encryption should fail after rotation threshold"
+        );
+
+        let error_msg = result.unwrap_err().to_string();
+        assert!(
+            error_msg.contains("rotation threshold"),
+            "Error should mention rotation threshold"
+        );
     }
 }

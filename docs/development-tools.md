@@ -127,11 +127,17 @@ export const DebugComponent = process.env.NODE_ENV !== 'production'
 ## Available Scripts
 
 ```bash
+# Run all linters and tests
+npm run check-all
+
 # Run all tests including debug component tests
 npm run test
 
-# Run linter (includes debug components)
-npm run lint
+# Run Javascript linter
+npm run lint-js
+
+# Run Rust linter
+npm run lint-rs
 
 # Start development server with debug tools
 npm run dev

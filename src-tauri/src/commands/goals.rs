@@ -8,6 +8,7 @@ use crate::{
     dto::{CreateGoalRequest, GoalFilters, UpdateGoalRequest},
     error::{FiscusError, Validator},
     models::{Goal, GoalStatus},
+    utils::parse_decimal_from_json,
 };
 use rust_decimal::prelude::ToPrimitive;
 
@@ -17,8 +18,7 @@ pub async fn create_goal(
     request: CreateGoalRequest,
     db: State<'_, Database>,
 ) -> Result<Goal, FiscusError> {
-    // Validate input
-    Validator::validate_uuid(&request.user_id, "user_id")?;
+    // Validate input (user_id already validated by ValidatedUserId)
     Validator::validate_string(&request.name, "name", 1, 100)?;
     Validator::validate_amount(request.target_amount, false)?; // Goals must have positive targets
 
@@ -35,7 +35,7 @@ pub async fn create_goal(
     let priority = request.priority.unwrap_or(1).clamp(1, 5);
 
     // Validate user exists
-    DatabaseUtils::validate_user_exists(&db, &request.user_id).await?;
+    DatabaseUtils::validate_user_exists(&db, &request.user_id.as_str()).await?;
 
     let goal_id = Uuid::new_v4().to_string();
     let now = chrono::Utc::now().to_rfc3339();
@@ -52,7 +52,7 @@ pub async fn create_goal(
         ("id".to_string(), Value::String(goal_id.clone())),
         (
             "user_id".to_string(),
-            Value::String(request.user_id.clone()),
+            Value::String(request.user_id.as_str()),
         ),
         ("name".to_string(), Value::String(request.name.clone())),
         (
@@ -100,7 +100,7 @@ pub async fn create_goal(
 
     let encrypted_params = EncryptedDatabaseUtils::encrypt_params_with_mapping(
         params_with_mapping,
-        &request.user_id,
+        &request.user_id.as_str(),
         "goals",
     )
     .await?;
@@ -117,13 +117,12 @@ pub async fn get_goals(
     filters: GoalFilters,
     db: State<'_, Database>,
 ) -> Result<Vec<Goal>, FiscusError> {
-    // Validate user
-    Validator::validate_uuid(&filters.user_id, "user_id")?;
-    DatabaseUtils::validate_user_exists(&db, &filters.user_id).await?;
+    // Validate user (already validated by ValidatedUserId)
+    DatabaseUtils::validate_user_exists(&db, &filters.user_id.as_str()).await?;
 
     // Build query with filters
     let mut filter_map = HashMap::new();
-    filter_map.insert("user_id".to_string(), filters.user_id.clone());
+    filter_map.insert("user_id".to_string(), filters.user_id.as_str().to_string());
 
     if let Some(status) = filters.status {
         filter_map.insert("status".to_string(), status.to_string());
@@ -164,7 +163,7 @@ pub async fn get_goals(
         &db,
         &final_query,
         where_params,
-        &filters.user_id,
+        &filters.user_id.as_str(),
         "goals",
     )
     .await?;
@@ -493,17 +492,8 @@ pub async fn get_goal_progress_summary(
             _ => {}
         }
 
-        let target_amount = goal
-            .get("target_amount")
-            .and_then(|v| v.as_str())
-            .and_then(|s| s.parse::<rust_decimal::Decimal>().ok())
-            .unwrap_or(rust_decimal::Decimal::ZERO);
-
-        let current_amount = goal
-            .get("current_amount")
-            .and_then(|v| v.as_str())
-            .and_then(|s| s.parse::<rust_decimal::Decimal>().ok())
-            .unwrap_or(rust_decimal::Decimal::ZERO);
+        let target_amount = parse_decimal_from_json(&goal, "target_amount");
+        let current_amount = parse_decimal_from_json(&goal, "current_amount");
 
         total_target_amount += target_amount;
         total_current_amount += current_amount;

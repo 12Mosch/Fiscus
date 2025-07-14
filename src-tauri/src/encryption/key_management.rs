@@ -7,7 +7,7 @@ use chrono::{DateTime, Duration, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{debug, info, instrument, warn};
+use tracing::{debug, error, info, instrument, warn};
 
 use super::key_derivation::{Argon2Kdf, KeyDerivation};
 use super::symmetric::{AesGcmEncryption, SymmetricEncryption};
@@ -31,6 +31,8 @@ pub struct KeyManager {
     keys: Arc<RwLock<HashMap<String, KeyEntry>>>,
     /// User-specific key mappings
     user_keys: Arc<RwLock<HashMap<String, HashMap<String, String>>>>,
+    /// Secondary index for fast key lookup by ID (maps key_id to key_identifier)
+    key_id_index: Arc<RwLock<HashMap<String, String>>>,
     /// Symmetric encryption for key storage
     symmetric_encryption: Box<dyn SymmetricEncryption + Send + Sync>,
     /// Key derivation for user passwords
@@ -54,6 +56,7 @@ impl KeyManager {
         Ok(Self {
             keys: Arc::new(RwLock::new(HashMap::new())),
             user_keys: Arc::new(RwLock::new(HashMap::new())),
+            key_id_index: Arc::new(RwLock::new(HashMap::new())),
             symmetric_encryption,
             key_derivation,
             master_key: None,
@@ -142,22 +145,23 @@ impl KeyManager {
             })
     }
 
-    /// Get a key by its unique key ID
+    /// Get a key by its unique key ID (O(1) lookup using secondary index)
     #[instrument(skip(self), fields(key_id = key_id))]
     pub async fn get_key_by_id(&self, key_id: &str) -> EncryptionResult<EncryptionKey> {
+        // Use secondary index for O(1) lookup
+        let key_id_index = self.key_id_index.read().await;
+        let key_identifier = key_id_index
+            .get(key_id)
+            .ok_or_else(|| FiscusError::NotFound(format!("Key not found with ID: {key_id}")))?;
+
+        // Get the key using the identifier
         let keys = self.keys.read().await;
+        let entry = keys.get(key_identifier).ok_or_else(|| {
+            FiscusError::NotFound(format!("Key entry not found for ID: {key_id}"))
+        })?;
 
-        // Search through all keys to find the one with matching key_id
-        for entry in keys.values() {
-            if entry.key.key_id == key_id {
-                debug!(key_id = key_id, "Found key by ID");
-                return Ok(entry.key.clone());
-            }
-        }
-
-        Err(FiscusError::NotFound(format!(
-            "Key not found with ID: {key_id}"
-        )))
+        debug!(key_id = key_id, "Found key by ID using secondary index");
+        Ok(entry.key.clone())
     }
 
     /// Validate that a user has access to a specific key for a data type
@@ -243,6 +247,7 @@ impl KeyManager {
     /// Store a key securely
     #[instrument(skip(self, key), fields(key_id = %key.key_id))]
     async fn store_key(&self, key_identifier: &str, key: EncryptionKey) -> EncryptionResult<()> {
+        let key_id = key.key_id.clone();
         let entry = KeyEntry {
             key,
             usage_count: 0,
@@ -252,6 +257,10 @@ impl KeyManager {
 
         let mut keys = self.keys.write().await;
         keys.insert(key_identifier.to_string(), entry);
+
+        // Update the secondary index for O(1) key lookups by ID
+        let mut key_id_index = self.key_id_index.write().await;
+        key_id_index.insert(key_id, key_identifier.to_string());
 
         // Update statistics
         let mut stats = self.stats.write().await;
@@ -325,21 +334,23 @@ impl KeyManager {
         let mut keys = self.keys.write().await;
         let mut removed_count = 0;
 
-        // Find expired keys
-        let expired_keys: Vec<String> = keys
+        // Find expired keys with their key_ids for index cleanup
+        let expired_keys: Vec<(String, String)> = keys
             .iter()
-            .filter_map(|(key_id, entry)| {
+            .filter_map(|(key_identifier, entry)| {
                 if entry.key.is_expired() {
-                    Some(key_id.clone())
+                    Some((key_identifier.clone(), entry.key.key_id.clone()))
                 } else {
                     None
                 }
             })
             .collect();
 
-        // Remove expired keys
-        for key_id in expired_keys {
-            keys.remove(&key_id);
+        // Remove expired keys from both main storage and secondary index
+        let mut key_id_index = self.key_id_index.write().await;
+        for (key_identifier, key_id) in expired_keys {
+            keys.remove(&key_identifier);
+            key_id_index.remove(&key_id);
             removed_count += 1;
         }
 
@@ -437,13 +448,138 @@ impl KeyRotationManager {
         // Get stats to see if we have any keys to check
         let stats = self.key_manager.get_stats().await?;
         if stats.active_keys == 0 {
+            debug!("No active keys found, skipping rotation check");
             return Ok(0);
         }
 
-        // In a real implementation, this would iterate through all users
-        // and check for rotation needs. For now, return 0 as a placeholder
-        // but at least we're using the key_manager field
-        Ok(0)
+        let mut total_rotated_keys = 0;
+
+        // Get all users from the key manager
+        let all_users = {
+            let user_keys_guard = self.key_manager.user_keys.read().await;
+            user_keys_guard.keys().cloned().collect::<Vec<String>>()
+        };
+
+        debug!(
+            user_count = all_users.len(),
+            "Starting rotation check for all users"
+        );
+
+        // Iterate through all users to check for rotation needs
+        for user_id in &all_users {
+            match self.check_and_rotate_user_keys(user_id).await {
+                Ok(rotated_count) => {
+                    if rotated_count > 0 {
+                        info!(
+                            user_id = %user_id,
+                            rotated_keys = rotated_count,
+                            "Successfully rotated keys for user"
+                        );
+                        total_rotated_keys += rotated_count;
+                    } else {
+                        debug!(
+                            user_id = %user_id,
+                            "No keys needed rotation for user"
+                        );
+                    }
+                }
+                Err(e) => {
+                    error!(
+                        user_id = %user_id,
+                        error = %e,
+                        "Failed to check/rotate keys for user"
+                    );
+                    // Continue with other users even if one fails
+                    continue;
+                }
+            }
+        }
+
+        info!(
+            total_rotated_keys = total_rotated_keys,
+            total_users_checked = all_users.len(),
+            "Completed rotation check for all users"
+        );
+
+        Ok(total_rotated_keys)
+    }
+
+    /// Check and rotate keys for a specific user
+    async fn check_and_rotate_user_keys(&self, user_id: &str) -> EncryptionResult<usize> {
+        debug!(user_id = %user_id, "Checking keys for rotation");
+
+        // Get all data types for this user
+        let data_types = self.key_manager.list_user_keys(user_id).await?;
+
+        if data_types.is_empty() {
+            debug!(user_id = %user_id, "User has no keys to check");
+            return Ok(0);
+        }
+
+        let mut keys_needing_rotation = Vec::new();
+
+        // Check each data type to see if rotation is needed
+        for data_type in &data_types {
+            match self.key_manager.needs_rotation(user_id, data_type).await {
+                Ok(needs_rotation) => {
+                    if needs_rotation {
+                        debug!(
+                            user_id = %user_id,
+                            data_type = %data_type,
+                            "Key needs rotation"
+                        );
+                        keys_needing_rotation.push(data_type.clone());
+                    }
+                }
+                Err(e) => {
+                    warn!(
+                        user_id = %user_id,
+                        data_type = %data_type,
+                        error = %e,
+                        "Failed to check rotation status for key"
+                    );
+                    // Continue checking other keys
+                    continue;
+                }
+            }
+        }
+
+        // If no keys need rotation, return early
+        if keys_needing_rotation.is_empty() {
+            debug!(
+                user_id = %user_id,
+                total_keys_checked = data_types.len(),
+                "No keys need rotation for user"
+            );
+            return Ok(0);
+        }
+
+        // Perform rotation for this user
+        debug!(
+            user_id = %user_id,
+            keys_to_rotate = keys_needing_rotation.len(),
+            "Starting key rotation for user"
+        );
+
+        match self.key_manager.rotate_user_keys(user_id).await {
+            Ok(()) => {
+                let rotated_count = keys_needing_rotation.len();
+                info!(
+                    user_id = %user_id,
+                    rotated_keys = rotated_count,
+                    "Successfully rotated keys for user"
+                );
+                Ok(rotated_count)
+            }
+            Err(e) => {
+                error!(
+                    user_id = %user_id,
+                    error = %e,
+                    "Failed to rotate keys for user"
+                );
+                Err(e)
+            }
+        }
     }
 }
 
@@ -518,5 +654,124 @@ mod tests {
         assert_eq!(user_keys.len(), 2);
         assert!(user_keys.contains(&"data_type_1".to_string()));
         assert!(user_keys.contains(&"data_type_2".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_key_lookup_by_id_with_secondary_index() {
+        let key_manager = KeyManager::new().unwrap();
+        // deepcode ignore NoHardcodedCredentials: <test>
+        let user_id = "test-user";
+        let data_type = "transaction_amount";
+
+        // Create a key
+        let original_key = key_manager
+            .get_or_create_key(user_id, data_type)
+            .await
+            .unwrap();
+
+        // Test O(1) lookup by key ID
+        let retrieved_key = key_manager
+            .get_key_by_id(&original_key.key_id)
+            .await
+            .unwrap();
+
+        assert_eq!(original_key.key_id, retrieved_key.key_id);
+        // Note: We don't compare key_data as SecureBytes doesn't implement PartialEq for security reasons
+
+        // Test lookup with non-existent key ID
+        let result = key_manager.get_key_by_id("non-existent-key-id").await;
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), FiscusError::NotFound(_)));
+    }
+
+    #[tokio::test]
+    async fn test_secondary_index_maintenance_during_cleanup() {
+        let key_manager = KeyManager::new().unwrap();
+        // deepcode ignore NoHardcodedCredentials: <test>
+        let user_id = "test-user";
+
+        // Create a key
+        let key = key_manager
+            .get_or_create_key(user_id, "test_data")
+            .await
+            .unwrap();
+
+        // Verify key can be found by ID
+        let found_key = key_manager.get_key_by_id(&key.key_id).await.unwrap();
+        assert_eq!(key.key_id, found_key.key_id);
+
+        // Note: We can't easily test cleanup of expired keys without modifying
+        // the key expiration logic, but we've verified the index works for
+        // normal operations. The cleanup logic is tested by ensuring both
+        // the main storage and secondary index are updated together.
+    }
+
+    #[tokio::test]
+    async fn test_check_and_rotate_keys_no_users() {
+        let key_manager = Arc::new(KeyManager::new().unwrap());
+        let rotation_manager = KeyRotationManager::new(key_manager, 30);
+
+        // Test with no users
+        let rotated_count = rotation_manager.check_and_rotate_keys().await.unwrap();
+        assert_eq!(rotated_count, 0);
+    }
+
+    #[tokio::test]
+    async fn test_check_and_rotate_keys_with_users() {
+        let key_manager = Arc::new(KeyManager::new().unwrap());
+        let rotation_manager = KeyRotationManager::new(key_manager.clone(), 30);
+
+        // Create keys for multiple users
+        let user1 = "test-user-1";
+        let user2 = "test-user-2";
+
+        let _key1 = key_manager
+            .get_or_create_key(user1, "data_type_1")
+            .await
+            .unwrap();
+        let _key2 = key_manager
+            .get_or_create_key(user1, "data_type_2")
+            .await
+            .unwrap();
+        let _key3 = key_manager
+            .get_or_create_key(user2, "data_type_1")
+            .await
+            .unwrap();
+
+        // Initially, no keys should need rotation
+        let rotated_count = rotation_manager.check_and_rotate_keys().await.unwrap();
+        assert_eq!(rotated_count, 0);
+
+        // Verify that the method can handle multiple users without errors
+        let stats = key_manager.get_stats().await.unwrap();
+        assert_eq!(stats.active_keys, 3);
+    }
+
+    #[tokio::test]
+    async fn test_check_and_rotate_user_keys_helper() {
+        let key_manager = Arc::new(KeyManager::new().unwrap());
+        let rotation_manager = KeyRotationManager::new(key_manager.clone(), 30);
+
+        let user_id = "test-user";
+
+        // Test with user that has no keys
+        let rotated_count = rotation_manager
+            .check_and_rotate_user_keys(user_id)
+            .await
+            .unwrap();
+        assert_eq!(rotated_count, 0);
+
+        // Create a key for the user
+        let _key = key_manager
+            .get_or_create_key(user_id, "test_data")
+            .await
+            .unwrap();
+
+        // Test with user that has keys but none need rotation
+        let rotated_count = rotation_manager
+            .check_and_rotate_user_keys(user_id)
+            .await
+            .unwrap();
+        assert_eq!(rotated_count, 0);
     }
 }

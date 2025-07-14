@@ -30,7 +30,7 @@ pub async fn secure_store(request: SecureStoreRequest) -> FiscusResult<SecureSto
     // Store the data using the repository
     let record = repository
         .store(
-            &request.user_id,
+            &request.user_id.as_str(),
             &request.data_type,
             &request.encrypted_data,
             &request.nonce,
@@ -59,7 +59,7 @@ pub async fn secure_retrieve(
 
     // Retrieve the data using the repository
     match repository
-        .retrieve(&request.user_id, &request.data_type)
+        .retrieve(&request.user_id.as_str(), &request.data_type)
         .await?
     {
         Some(record) => Ok(SecureRetrieveResponse {
@@ -86,7 +86,7 @@ pub async fn secure_delete(request: SecureDeleteRequest) -> FiscusResult<SecureD
 
     // Delete the data using the repository
     let was_deleted = repository
-        .delete(&request.user_id, &request.data_type)
+        .delete(&request.user_id.as_str(), &request.data_type)
         .await?;
     let deleted_at = Utc::now();
 

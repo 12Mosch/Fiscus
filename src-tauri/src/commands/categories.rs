@@ -17,7 +17,7 @@ pub async fn create_category(
     db: State<'_, Database>,
 ) -> Result<Category, FiscusError> {
     // Validate input
-    Validator::validate_uuid(&request.user_id, "user_id")?;
+    Validator::validate_uuid(&request.user_id.as_str(), "user_id")?;
     Validator::validate_string(&request.name, "name", 1, 100)?;
 
     if let Some(ref description) = request.description {
@@ -29,11 +29,12 @@ pub async fn create_category(
     }
 
     // Validate user exists
-    DatabaseUtils::validate_user_exists(&db, &request.user_id).await?;
+    DatabaseUtils::validate_user_exists(&db, &request.user_id.as_str()).await?;
 
     // Validate parent category exists and belongs to user (if provided)
     if let Some(ref parent_id) = request.parent_category_id {
-        DatabaseUtils::validate_category_ownership(&db, parent_id, &request.user_id).await?;
+        DatabaseUtils::validate_category_ownership(&db, parent_id, &request.user_id.as_str())
+            .await?;
     }
 
     // Check if category name already exists for this user
@@ -43,7 +44,7 @@ pub async fn create_category(
         &db,
         existing_query,
         vec![
-            Value::String(request.user_id.clone()),
+            Value::String(request.user_id.as_str()),
             Value::String(request.name.clone()),
         ],
     )
@@ -67,7 +68,7 @@ pub async fn create_category(
 
     let params = vec![
         Value::String(category_id.clone()),
-        Value::String(request.user_id.clone()),
+        Value::String(request.user_id.as_str()),
         Value::String(request.name.clone()),
         request
             .description
@@ -108,12 +109,12 @@ pub async fn get_categories(
     db: State<'_, Database>,
 ) -> Result<Vec<Category>, FiscusError> {
     // Validate user
-    Validator::validate_uuid(&filters.user_id, "user_id")?;
-    DatabaseUtils::validate_user_exists(&db, &filters.user_id).await?;
+    Validator::validate_uuid(&filters.user_id.as_str(), "user_id")?;
+    DatabaseUtils::validate_user_exists(&db, &filters.user_id.as_str()).await?;
 
     // Build query with filters
     let mut filter_map = HashMap::new();
-    filter_map.insert("user_id".to_string(), filters.user_id);
+    filter_map.insert("user_id".to_string(), filters.user_id.as_str());
 
     if let Some(parent_id) = filters.parent_category_id {
         if parent_id.is_empty() {

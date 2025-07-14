@@ -192,7 +192,7 @@ if error.is_critical() {
 
 ### Console Format (Development)
 
-``` bash
+``` console
 2024-01-15T10:30:45.123Z  INFO fiscus::commands::auth: Command request started
     with request_id: "550e8400-e29b-41d4-a716-446655440000"
     and command: "authenticate_user"

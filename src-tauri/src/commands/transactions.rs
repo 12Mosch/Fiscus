@@ -11,6 +11,7 @@ use crate::{
     },
     error::{FiscusError, SecurityValidator, Validator},
     models::{Transaction, TransactionStatus, TransactionType, Transfer},
+    utils::parse_decimal_from_json,
     with_transaction,
 };
 
@@ -20,23 +21,25 @@ pub async fn create_transaction(
     request: CreateTransactionRequest,
     db: State<'_, Database>,
 ) -> Result<Transaction, FiscusError> {
-    // Validate input
-    Validator::validate_uuid(&request.user_id, "user_id")?;
+    // Validate input (user_id already validated by ValidatedUserId)
     Validator::validate_uuid(&request.account_id, "account_id")?;
     Validator::validate_string(&request.description, "description", 1, 255)?;
     Validator::validate_amount(request.amount, true)?; // Allow negative for refunds/corrections
 
-    let transaction_date = Validator::validate_datetime(&request.transaction_date)?;
+    // Format the DateTime to RFC3339 string for validation
+    let transaction_date = Validator::validate_datetime(&request.transaction_date.to_rfc3339())?;
 
     if let Some(ref category_id) = request.category_id {
         Validator::validate_uuid(category_id, "category_id")?;
     }
 
     // Validate ownership
-    DatabaseUtils::validate_account_ownership(&db, &request.account_id, &request.user_id).await?;
+    DatabaseUtils::validate_account_ownership(&db, &request.account_id, &request.user_id.as_str())
+        .await?;
 
     if let Some(ref category_id) = request.category_id {
-        DatabaseUtils::validate_category_ownership(&db, category_id, &request.user_id).await?;
+        DatabaseUtils::validate_category_ownership(&db, category_id, &request.user_id.as_str())
+            .await?;
     }
 
     let transaction_id = Uuid::new_v4().to_string();
@@ -63,7 +66,7 @@ pub async fn create_transaction(
             ("id".to_string(), Value::String(transaction_id.clone())),
             (
                 "user_id".to_string(),
-                Value::String(request.user_id.clone()),
+                Value::String(request.user_id.to_string()),
             ),
             (
                 "account_id".to_string(),
@@ -134,7 +137,7 @@ pub async fn create_transaction(
 
         let encrypted_params = EncryptedDatabaseUtils::encrypt_params_with_mapping(
             params_with_mapping,
-            &request.user_id,
+            &request.user_id.as_str(),
             "transactions",
         )
         .await?;
@@ -166,13 +169,12 @@ pub async fn get_transactions(
     filters: TransactionFilters,
     db: State<'_, Database>,
 ) -> Result<Vec<Transaction>, FiscusError> {
-    // Validate user
-    Validator::validate_uuid(&filters.user_id, "user_id")?;
-    DatabaseUtils::validate_user_exists(&db, &filters.user_id).await?;
+    // Validate user (already validated by ValidatedUserId)
+    DatabaseUtils::validate_user_exists(&db, &filters.user_id.as_str()).await?;
 
     // Build filter map
     let mut filter_map = HashMap::new();
-    filter_map.insert("user_id".to_string(), filters.user_id.clone());
+    filter_map.insert("user_id".to_string(), filters.user_id.as_str().to_string());
 
     if let Some(account_id) = filters.account_id {
         Validator::validate_uuid(&account_id, "account_id")?;
@@ -272,7 +274,7 @@ pub async fn get_transactions(
         &db,
         &final_query,
         where_params,
-        &filters.user_id,
+        &filters.user_id.as_str(),
         "transactions",
     )
     .await?;
@@ -598,8 +600,7 @@ pub async fn create_transfer(
     request: CreateTransferRequest,
     db: State<'_, Database>,
 ) -> Result<Transfer, FiscusError> {
-    // Validate input
-    Validator::validate_uuid(&request.user_id, "user_id")?;
+    // Validate input (user_id already validated by ValidatedUserId)
     Validator::validate_uuid(&request.from_account_id, "from_account_id")?;
     Validator::validate_uuid(&request.to_account_id, "to_account_id")?;
     Validator::validate_amount(request.amount, false)?; // Transfers must be positive
@@ -614,10 +615,18 @@ pub async fn create_transfer(
     }
 
     // Validate account ownership
-    DatabaseUtils::validate_account_ownership(&db, &request.from_account_id, &request.user_id)
-        .await?;
-    DatabaseUtils::validate_account_ownership(&db, &request.to_account_id, &request.user_id)
-        .await?;
+    DatabaseUtils::validate_account_ownership(
+        &db,
+        &request.from_account_id,
+        &request.user_id.as_str(),
+    )
+    .await?;
+    DatabaseUtils::validate_account_ownership(
+        &db,
+        &request.to_account_id,
+        &request.user_id.as_str(),
+    )
+    .await?;
 
     let transfer_id = Uuid::new_v4().to_string();
     let from_transaction_id = Uuid::new_v4().to_string();
@@ -640,7 +649,7 @@ pub async fn create_transfer(
             ("id".to_string(), Value::String(transfer_id.clone())),
             (
                 "user_id".to_string(),
-                Value::String(request.user_id.clone()),
+                Value::String(request.user_id.to_string()),
             ),
             (
                 "from_account_id".to_string(),
@@ -680,7 +689,7 @@ pub async fn create_transfer(
 
         let encrypted_transfer_params = EncryptedDatabaseUtils::encrypt_params_with_mapping(
             transfer_params_with_mapping,
-            &request.user_id,
+            &request.user_id.as_str(),
             "transfers",
         )
         .await?;
@@ -700,7 +709,7 @@ pub async fn create_transfer(
             ("id".to_string(), Value::String(from_transaction_id)),
             (
                 "user_id".to_string(),
-                Value::String(request.user_id.clone()),
+                Value::String(request.user_id.to_string()),
             ),
             (
                 "account_id".to_string(),
@@ -732,7 +741,7 @@ pub async fn create_transfer(
 
         let encrypted_from_params = EncryptedDatabaseUtils::encrypt_params_with_mapping(
             from_params_with_mapping,
-            &request.user_id,
+            &request.user_id.as_str(),
             "transactions",
         )
         .await?;
@@ -753,7 +762,7 @@ pub async fn create_transfer(
             ("id".to_string(), Value::String(to_transaction_id)),
             (
                 "user_id".to_string(),
-                Value::String(request.user_id.clone()),
+                Value::String(request.user_id.to_string()),
             ),
             (
                 "account_id".to_string(),
@@ -785,7 +794,7 @@ pub async fn create_transfer(
 
         let encrypted_to_params = EncryptedDatabaseUtils::encrypt_params_with_mapping(
             to_params_with_mapping,
-            &request.user_id,
+            &request.user_id.as_str(),
             "transactions",
         )
         .await?;
@@ -916,28 +925,15 @@ pub async fn get_transaction_summary(
 
     let summary_data = summary.unwrap_or_default();
 
-    let total_income = summary_data
-        .get("total_income")
-        .and_then(|v| v.as_str())
-        .and_then(|s| s.parse::<rust_decimal::Decimal>().ok())
-        .unwrap_or(rust_decimal::Decimal::ZERO);
-
-    let total_expenses = summary_data
-        .get("total_expenses")
-        .and_then(|v| v.as_str())
-        .and_then(|s| s.parse::<rust_decimal::Decimal>().ok())
-        .unwrap_or(rust_decimal::Decimal::ZERO);
+    let total_income = parse_decimal_from_json(&summary_data, "total_income");
+    let total_expenses = parse_decimal_from_json(&summary_data, "total_expenses");
 
     let transaction_count = summary_data
         .get("transaction_count")
         .and_then(|v| v.as_i64())
         .unwrap_or(0) as i32;
 
-    let average_transaction = summary_data
-        .get("average_transaction")
-        .and_then(|v| v.as_str())
-        .and_then(|s| s.parse::<rust_decimal::Decimal>().ok())
-        .unwrap_or(rust_decimal::Decimal::ZERO);
+    let average_transaction = parse_decimal_from_json(&summary_data, "average_transaction");
 
     let net_income = total_income - total_expenses;
 

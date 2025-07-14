@@ -5,7 +5,11 @@ use std::collections::HashMap;
 use tempfile::NamedTempFile;
 use uuid::Uuid;
 
-use crate::{dto::*, error::FiscusResult, models::*};
+use crate::{
+    dto::*,
+    error::{FiscusResult, ValidatedCurrency, ValidatedUserId},
+    models::*,
+};
 
 /// Test utilities for creating mock data and setting up test environments
 pub struct TestUtils;
@@ -176,11 +180,11 @@ impl TestUtils {
     /// Create test CreateAccountRequest
     pub fn create_account_request(user_id: &str, name: &str) -> CreateAccountRequest {
         CreateAccountRequest {
-            user_id: user_id.to_string(),
+            user_id: ValidatedUserId::new(user_id).unwrap(),
             account_type_id: "checking".to_string(),
             name: name.to_string(),
             balance: Some(Decimal::ZERO),
-            currency: "USD".to_string(),
+            currency: ValidatedCurrency::new("USD").unwrap(),
             account_number: None,
         }
     }
@@ -193,13 +197,13 @@ impl TestUtils {
         description: &str,
     ) -> CreateTransactionRequest {
         CreateTransactionRequest {
-            user_id: user_id.to_string(),
+            user_id: ValidatedUserId::new(user_id).unwrap(),
             account_id: account_id.to_string(),
             category_id: None,
             amount,
             description: description.to_string(),
             notes: None,
-            transaction_date: Utc::now().to_rfc3339(),
+            transaction_date: Utc::now(),
             transaction_type: TransactionType::Expense,
             reference_number: None,
             payee: None,
@@ -214,7 +218,7 @@ impl TestUtils {
         is_income: bool,
     ) -> CreateCategoryRequest {
         CreateCategoryRequest {
-            user_id: user_id.to_string(),
+            user_id: ValidatedUserId::new(user_id).unwrap(),
             name: name.to_string(),
             description: None,
             color: None,
@@ -227,7 +231,7 @@ impl TestUtils {
     /// Create test filters with default values
     pub fn default_account_filters(user_id: &str) -> AccountFilters {
         AccountFilters {
-            user_id: user_id.to_string(),
+            user_id: ValidatedUserId::new(user_id).unwrap(),
             account_type_id: None,
             is_active: None,
             sort_by: None,
@@ -240,7 +244,7 @@ impl TestUtils {
     /// Create test filters with default values
     pub fn default_transaction_filters(user_id: &str) -> TransactionFilters {
         TransactionFilters {
-            user_id: user_id.to_string(),
+            user_id: ValidatedUserId::new(user_id).unwrap(),
             account_id: None,
             category_id: None,
             transaction_type: None,

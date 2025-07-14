@@ -205,7 +205,7 @@ pub async fn change_password(
     db: State<'_, Database>,
 ) -> Result<bool, FiscusError> {
     // Validate input
-    Validator::validate_uuid(&request.user_id, "user_id")?;
+    Validator::validate_uuid(&request.user_id.as_str(), "user_id")?;
     Validator::validate_string(&request.current_password, "current_password", 1, 128)?;
     Validator::validate_string(&request.new_password, "new_password", 8, 128)?;
 
@@ -215,7 +215,7 @@ pub async fn change_password(
         DatabaseUtils::execute_query_single(
             &db,
             user_query,
-            vec![Value::String(request.user_id.clone())],
+            vec![Value::String(request.user_id.as_str())],
         )
         .await?;
 
@@ -241,7 +241,7 @@ pub async fn change_password(
     let params = vec![
         Value::String(new_password_hash),
         Value::String(chrono::Utc::now().to_rfc3339()),
-        Value::String(request.user_id),
+        Value::String(request.user_id.as_str()),
     ];
 
     let affected_rows = DatabaseUtils::execute_non_query(&db, update_query, params).await?;
@@ -308,7 +308,13 @@ pub async fn get_current_user(
 /// Hash a password using Argon2
 fn hash_password(password: &str) -> FiscusResult<String> {
     let salt = SaltString::generate(&mut OsRng);
-    let argon2 = Argon2::default();
+    use argon2::{Algorithm, Params, Version};
+
+    // Use explicit parameters for better security
+    // Memory: 64 MB, Iterations: 3, Parallelism: 1
+    let params = Params::new(65536, 3, 1, None)
+        .map_err(|e| FiscusError::Internal(format!("Invalid Argon2 parameters: {e}")))?;
+    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
 
     let password_hash = argon2
         .hash_password(password.as_bytes(), &salt)
@@ -484,8 +490,9 @@ mod tests {
 
     #[test]
     fn test_change_password_request_structure() {
+        use crate::error::ValidatedUserId;
         let request = ChangePasswordRequest {
-            user_id: uuid::Uuid::new_v4().to_string(),
+            user_id: ValidatedUserId::new(&uuid::Uuid::new_v4().to_string()).unwrap(),
             current_password: "current123".to_string(),
             new_password: "newpassword123".to_string(),
         };

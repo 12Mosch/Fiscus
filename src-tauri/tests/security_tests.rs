@@ -58,11 +58,39 @@ async fn test_authentication_validation() {
     assert!(result.is_ok(), "Fresh authentication should pass");
 
     // Test with expired authentication (simulate by creating old context)
+    // Use checked_sub to safely handle potential underflow
     let mut old_context = SecurityContext::new("test-user".to_string());
-    old_context.authenticated_at = Instant::now() - Duration::from_secs(7200); // 2 hours ago
 
-    let result = auth_validator.validate_authentication(&old_context).await;
-    assert!(result.is_err(), "Expired authentication should fail");
+    // Try to create an old timestamp, but handle the case where system uptime is less than 2 hours
+    if let Some(old_instant) = Instant::now().checked_sub(Duration::from_secs(7200)) {
+        old_context.authenticated_at = old_instant;
+
+        let result = auth_validator.validate_authentication(&old_context).await;
+        assert!(result.is_err(), "Expired authentication should fail");
+    } else {
+        // If we can't subtract 2 hours (system uptime < 2 hours),
+        // create a context, wait a bit, then test with a shorter duration
+        // The AuthValidator has a 1-hour timeout, so we'll create a context
+        // and then wait long enough that it would be expired if we had a very short timeout
+
+        // Create context and wait 10ms
+        tokio::time::sleep(Duration::from_millis(10)).await;
+
+        // Now manually check if the authentication would be expired with a short timeout
+        // Since we can't modify the AuthValidator timeout, we'll test the SecurityContext directly
+        let is_valid_with_short_timeout = old_context.is_auth_valid(Duration::from_millis(5));
+        assert!(
+            !is_valid_with_short_timeout,
+            "Authentication should be expired with very short timeout"
+        );
+
+        // The regular validator should still pass since 10ms < 1 hour
+        let result = auth_validator.validate_authentication(&old_context).await;
+        assert!(
+            result.is_ok(),
+            "Authentication should still be valid with normal timeout"
+        );
+    }
 }
 
 /// Test access control

@@ -8,6 +8,7 @@ use crate::{
     dto::{AccountFilters, AccountSummaryResponse, CreateAccountRequest, UpdateAccountRequest},
     error::{FiscusError, SecurityValidator, Validator},
     models::Account,
+    utils::parse_decimal_from_json,
 };
 
 /// Create a new account
@@ -17,13 +18,13 @@ pub async fn create_account(
     db: State<'_, Database>,
 ) -> Result<Account, FiscusError> {
     // Validate input
-    Validator::validate_uuid(&request.user_id, "user_id")?;
+    Validator::validate_uuid(&request.user_id.as_str(), "user_id")?;
     Validator::validate_uuid(&request.account_type_id, "account_type_id")?;
     Validator::validate_string(&request.name, "name", 1, 100)?;
-    Validator::validate_string(&request.currency, "currency", 3, 3)?; // ISO currency codes are 3 chars
+    Validator::validate_string(request.currency.as_str(), "currency", 3, 3)?; // ISO currency codes are 3 chars
 
     // Validate user exists
-    DatabaseUtils::validate_user_exists(&db, &request.user_id).await?;
+    DatabaseUtils::validate_user_exists(&db, &request.user_id.as_str()).await?;
 
     // Validate account type exists
     let account_type_query = "SELECT id FROM account_types WHERE id = ?1";
@@ -56,7 +57,7 @@ pub async fn create_account(
         ("id".to_string(), Value::String(account_id.clone())),
         (
             "user_id".to_string(),
-            Value::String(request.user_id.clone()),
+            Value::String(request.user_id.as_str()),
         ),
         (
             "account_type_id".to_string(),
@@ -69,7 +70,7 @@ pub async fn create_account(
         ),
         (
             "currency".to_string(),
-            Value::String(request.currency.clone()),
+            Value::String(request.currency.as_str().to_string()),
         ),
         (
             "account_number".to_string(),
@@ -86,7 +87,7 @@ pub async fn create_account(
 
     let encrypted_params = EncryptedDatabaseUtils::encrypt_params_with_mapping(
         params_with_mapping,
-        &request.user_id,
+        &request.user_id.as_str(),
         "accounts",
     )
     .await?;
@@ -104,12 +105,12 @@ pub async fn get_accounts(
     db: State<'_, Database>,
 ) -> Result<Vec<Account>, FiscusError> {
     // Validate user
-    Validator::validate_uuid(&filters.user_id, "user_id")?;
-    DatabaseUtils::validate_user_exists(&db, &filters.user_id).await?;
+    Validator::validate_uuid(&filters.user_id.as_str(), "user_id")?;
+    DatabaseUtils::validate_user_exists(&db, &filters.user_id.as_str()).await?;
 
     // Build query with filters
     let mut filter_map = HashMap::new();
-    filter_map.insert("user_id".to_string(), filters.user_id.clone());
+    filter_map.insert("user_id".to_string(), filters.user_id.as_str());
 
     if let Some(account_type_id) = filters.account_type_id {
         Validator::validate_uuid(&account_type_id, "account_type_id")?;
@@ -151,7 +152,7 @@ pub async fn get_accounts(
         &db,
         &final_query,
         where_params,
-        &filters.user_id,
+        &filters.user_id.as_str(),
         "accounts",
     )
     .await?;
@@ -394,11 +395,7 @@ pub async fn get_account_summary(
     let account_count = accounts_with_types.len() as i32;
 
     for account in accounts_with_types {
-        let balance = account
-            .get("balance")
-            .and_then(|v| v.as_str())
-            .and_then(|s| s.parse::<rust_decimal::Decimal>().ok())
-            .unwrap_or(rust_decimal::Decimal::ZERO);
+        let balance = parse_decimal_from_json(&account, "balance");
 
         let is_asset = account
             .get("is_asset")

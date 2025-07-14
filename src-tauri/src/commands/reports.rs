@@ -5,6 +5,7 @@ use tauri::State;
 use crate::{
     database::{Database, DatabaseUtils},
     error::{FiscusError, Validator},
+    utils::parse_decimal_from_json,
 };
 
 /// Get financial overview report for a user
@@ -81,34 +82,24 @@ pub async fn get_financial_overview(
     let mut result = overview.unwrap_or_default();
 
     // Calculate derived values
-    if let (Some(assets), Some(liabilities)) = (
-        result
-            .get("total_assets")
-            .and_then(|v| v.as_str())
-            .and_then(|s| s.parse::<rust_decimal::Decimal>().ok()),
-        result
-            .get("total_liabilities")
-            .and_then(|v| v.as_str())
-            .and_then(|s| s.parse::<rust_decimal::Decimal>().ok()),
-    ) {
-        let net_worth = assets - liabilities;
+    let total_assets = parse_decimal_from_json(&result, "total_assets");
+    let total_liabilities = parse_decimal_from_json(&result, "total_liabilities");
+
+    // Only calculate net worth if we have valid asset or liability data
+    if result.contains_key("total_assets") || result.contains_key("total_liabilities") {
+        let net_worth = total_assets - total_liabilities;
         result.insert(
             "net_worth".to_string(),
             serde_json::Value::String(net_worth.to_string()),
         );
     }
 
-    if let (Some(income), Some(expenses)) = (
-        result
-            .get("total_income")
-            .and_then(|v| v.as_str())
-            .and_then(|s| s.parse::<rust_decimal::Decimal>().ok()),
-        result
-            .get("total_expenses")
-            .and_then(|v| v.as_str())
-            .and_then(|s| s.parse::<rust_decimal::Decimal>().ok()),
-    ) {
-        let net_income = income - expenses;
+    let total_income = parse_decimal_from_json(&result, "total_income");
+    let total_expenses = parse_decimal_from_json(&result, "total_expenses");
+
+    // Only calculate net income if we have valid income or expense data
+    if result.contains_key("total_income") || result.contains_key("total_expenses") {
+        let net_income = total_income - total_expenses;
         result.insert(
             "net_income".to_string(),
             serde_json::Value::String(net_income.to_string()),
@@ -241,7 +232,6 @@ pub async fn get_account_balance_history(
         DatabaseUtils::validate_account_ownership(&db, acc_id, &user_id).await?;
         conditions.push(format!("t.account_id = ?{param_index}"));
         params.push(Value::String(acc_id.clone()));
-        // param_index += 1; // Removed unused assignment
     }
 
     let days_back = days.unwrap_or(30).clamp(1, 365);

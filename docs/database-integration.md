@@ -306,10 +306,10 @@ This approach ensures type safety and prevents runtime errors that could occur w
 
 ```typescript
 // Get net worth
-const netWorth = await databaseService.accounts.getNetWorth('user-123');
+const netWorth = await apiService.accounts.getNetWorth('user-123');
 
 // Get category spending
-const categorySpending = await databaseService.transactions.getCategorySpending(
+const categorySpending = await apiService.transactions.getCategorySpending(
   'user-123',
   '2024-01-01',
   '2024-01-31'
@@ -356,6 +356,10 @@ function Dashboard() {
 
 ### Access Control
 
+- API service enforces authentication and authorization
+- All data access goes through validated Tauri commands
+- Encryption/decryption handled transparently by the API layer
+- No SQL queries exposed to frontend code
 - Row Level Security through user_id filtering
 - All queries scoped to authenticated user
 - Prepared statements prevent SQL injection

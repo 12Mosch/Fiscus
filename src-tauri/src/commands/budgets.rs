@@ -11,6 +11,7 @@ use crate::{
     },
     error::{FiscusError, SecurityValidator, Validator},
     models::{Budget, BudgetPeriod},
+    utils::parse_decimal_from_json,
 };
 
 /// Create a new budget period
@@ -20,7 +21,7 @@ pub async fn create_budget_period(
     db: State<'_, Database>,
 ) -> Result<BudgetPeriod, FiscusError> {
     // Validate input
-    Validator::validate_uuid(&request.user_id, "user_id")?;
+    Validator::validate_uuid(&request.user_id.as_str(), "user_id")?;
     Validator::validate_string(&request.name, "name", 1, 100)?;
 
     let start_date = Validator::validate_date(&request.start_date)?;
@@ -33,7 +34,7 @@ pub async fn create_budget_period(
     }
 
     // Validate user exists
-    DatabaseUtils::validate_user_exists(&db, &request.user_id).await?;
+    DatabaseUtils::validate_user_exists(&db, &request.user_id.as_str()).await?;
 
     // Check for overlapping budget periods
     let overlap_query = r#"
@@ -48,7 +49,7 @@ pub async fn create_budget_period(
             &db,
             overlap_query,
             vec![
-                Value::String(request.user_id.clone()),
+                Value::String(request.user_id.as_str()),
                 Value::String(request.start_date.clone()),
                 Value::String(request.end_date.clone()),
             ],
@@ -71,7 +72,7 @@ pub async fn create_budget_period(
 
     let params = vec![
         Value::String(period_id.clone()),
-        Value::String(request.user_id.clone()),
+        Value::String(request.user_id.as_str()),
         Value::String(request.name.clone()),
         Value::String(request.start_date),
         Value::String(request.end_date),
@@ -146,13 +147,13 @@ pub async fn create_budget(
     db: State<'_, Database>,
 ) -> Result<Budget, FiscusError> {
     // Validate input
-    Validator::validate_uuid(&request.user_id, "user_id")?;
+    Validator::validate_uuid(&request.user_id.as_str(), "user_id")?;
     Validator::validate_uuid(&request.budget_period_id, "budget_period_id")?;
     Validator::validate_uuid(&request.category_id, "category_id")?;
     Validator::validate_amount(request.allocated_amount, false)?; // Budget amounts must be positive
 
     // Validate user exists
-    DatabaseUtils::validate_user_exists(&db, &request.user_id).await?;
+    DatabaseUtils::validate_user_exists(&db, &request.user_id.as_str()).await?;
 
     // Validate budget period exists and belongs to user
     let period_query = "SELECT id FROM budget_periods WHERE id = ?1 AND user_id = ?2";
@@ -162,7 +163,7 @@ pub async fn create_budget(
             period_query,
             vec![
                 Value::String(request.budget_period_id.clone()),
-                Value::String(request.user_id.clone()),
+                Value::String(request.user_id.as_str()),
             ],
         )
         .await?;
@@ -172,7 +173,12 @@ pub async fn create_budget(
     }
 
     // Validate category exists and belongs to user
-    DatabaseUtils::validate_category_ownership(&db, &request.category_id, &request.user_id).await?;
+    DatabaseUtils::validate_category_ownership(
+        &db,
+        &request.category_id,
+        &request.user_id.as_str(),
+    )
+    .await?;
 
     // Check if budget already exists for this period and category
     let existing_query = "SELECT id FROM budgets WHERE budget_period_id = ?1 AND category_id = ?2";
@@ -207,7 +213,7 @@ pub async fn create_budget(
         ("id".to_string(), Value::String(budget_id.clone())),
         (
             "user_id".to_string(),
-            Value::String(request.user_id.clone()),
+            Value::String(request.user_id.as_str()),
         ),
         (
             "budget_period_id".to_string(),
@@ -239,7 +245,7 @@ pub async fn create_budget(
 
     let encrypted_params = EncryptedDatabaseUtils::encrypt_params_with_mapping(
         params_with_mapping,
-        &request.user_id,
+        &request.user_id.as_str(),
         "budgets",
     )
     .await?;
@@ -257,12 +263,12 @@ pub async fn get_budgets(
     db: State<'_, Database>,
 ) -> Result<Vec<Budget>, FiscusError> {
     // Validate user
-    Validator::validate_uuid(&filters.user_id, "user_id")?;
-    DatabaseUtils::validate_user_exists(&db, &filters.user_id).await?;
+    Validator::validate_uuid(&filters.user_id.as_str(), "user_id")?;
+    DatabaseUtils::validate_user_exists(&db, &filters.user_id.as_str()).await?;
 
     // Build query with filters
     let mut filter_map = HashMap::new();
-    filter_map.insert("user_id".to_string(), filters.user_id.clone());
+    filter_map.insert("user_id".to_string(), filters.user_id.as_str());
 
     if let Some(period_id) = filters.budget_period_id {
         Validator::validate_uuid(&period_id, "budget_period_id")?;
@@ -300,7 +306,7 @@ pub async fn get_budgets(
         &db,
         &final_query,
         where_params,
-        &filters.user_id,
+        &filters.user_id.as_str(),
         "budgets",
     )
     .await?;
@@ -531,17 +537,8 @@ pub async fn get_budget_summary(
     let mut categories_under_budget = 0i32;
 
     for budget in budgets {
-        let allocated_amount = budget
-            .get("allocated_amount")
-            .and_then(|v| v.as_str())
-            .and_then(|s| s.parse::<rust_decimal::Decimal>().ok())
-            .unwrap_or(rust_decimal::Decimal::ZERO);
-
-        let spent_amount = budget
-            .get("spent_amount")
-            .and_then(|v| v.as_str())
-            .and_then(|s| s.parse::<rust_decimal::Decimal>().ok())
-            .unwrap_or(rust_decimal::Decimal::ZERO);
+        let allocated_amount = parse_decimal_from_json(&budget, "allocated_amount");
+        let spent_amount = parse_decimal_from_json(&budget, "spent_amount");
 
         total_allocated += allocated_amount;
         total_spent += spent_amount;

@@ -3,6 +3,7 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 use crate::encryption::types::{EncryptionAlgorithm, KeyDerivationAlgorithm, KeyType};
+use crate::error::{ValidatedCurrency, ValidatedUserId};
 use crate::models::{GoalStatus, TransactionStatus, TransactionType};
 
 /// Request DTOs for creating entities
@@ -16,17 +17,17 @@ pub struct CreateUserRequest {
 
 #[derive(Debug, Deserialize)]
 pub struct CreateAccountRequest {
-    pub user_id: String,
+    pub user_id: ValidatedUserId,
     pub account_type_id: String,
     pub name: String,
     pub balance: Option<Decimal>,
-    pub currency: String,
+    pub currency: ValidatedCurrency,
     pub account_number: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct CreateCategoryRequest {
-    pub user_id: String,
+    pub user_id: ValidatedUserId,
     pub name: String,
     pub description: Option<String>,
     pub color: Option<String>,
@@ -37,13 +38,13 @@ pub struct CreateCategoryRequest {
 
 #[derive(Debug, Deserialize)]
 pub struct CreateTransactionRequest {
-    pub user_id: String,
+    pub user_id: ValidatedUserId,
     pub account_id: String,
     pub category_id: Option<String>,
     pub amount: Decimal,
     pub description: String,
     pub notes: Option<String>,
-    pub transaction_date: String, // ISO 8601 format
+    pub transaction_date: DateTime<Utc>,
     pub transaction_type: TransactionType,
     pub reference_number: Option<String>,
     pub payee: Option<String>,
@@ -52,7 +53,7 @@ pub struct CreateTransactionRequest {
 
 #[derive(Debug, Deserialize)]
 pub struct CreateBudgetPeriodRequest {
-    pub user_id: String,
+    pub user_id: ValidatedUserId,
     pub name: String,
     pub start_date: String, // YYYY-MM-DD format
     pub end_date: String,   // YYYY-MM-DD format
@@ -60,7 +61,7 @@ pub struct CreateBudgetPeriodRequest {
 
 #[derive(Debug, Deserialize)]
 pub struct CreateBudgetRequest {
-    pub user_id: String,
+    pub user_id: ValidatedUserId,
     pub budget_period_id: String,
     pub category_id: String,
     pub allocated_amount: Decimal,
@@ -69,7 +70,7 @@ pub struct CreateBudgetRequest {
 
 #[derive(Debug, Deserialize)]
 pub struct CreateGoalRequest {
-    pub user_id: String,
+    pub user_id: ValidatedUserId,
     pub name: String,
     pub description: Option<String>,
     pub target_amount: Decimal,
@@ -80,7 +81,7 @@ pub struct CreateGoalRequest {
 
 #[derive(Debug, Deserialize)]
 pub struct CreateTransferRequest {
-    pub user_id: String,
+    pub user_id: ValidatedUserId,
     pub from_account_id: String,
     pub to_account_id: String,
     pub amount: Decimal,
@@ -150,7 +151,7 @@ pub struct UpdateGoalRequest {
 
 #[derive(Debug, Deserialize)]
 pub struct AccountFilters {
-    pub user_id: String,
+    pub user_id: ValidatedUserId,
     pub account_type_id: Option<String>,
     pub is_active: Option<bool>,
     pub sort_by: Option<String>,
@@ -161,7 +162,7 @@ pub struct AccountFilters {
 
 #[derive(Debug, Deserialize)]
 pub struct TransactionFilters {
-    pub user_id: String,
+    pub user_id: ValidatedUserId,
     pub account_id: Option<String>,
     pub category_id: Option<String>,
     pub transaction_type: Option<TransactionType>,
@@ -179,7 +180,7 @@ pub struct TransactionFilters {
 
 #[derive(Debug, Deserialize)]
 pub struct CategoryFilters {
-    pub user_id: String,
+    pub user_id: ValidatedUserId,
     pub parent_category_id: Option<String>,
     pub is_income: Option<bool>,
     pub is_active: Option<bool>,
@@ -189,7 +190,7 @@ pub struct CategoryFilters {
 
 #[derive(Debug, Deserialize)]
 pub struct BudgetFilters {
-    pub user_id: String,
+    pub user_id: ValidatedUserId,
     pub budget_period_id: Option<String>,
     pub category_id: Option<String>,
     pub sort_by: Option<String>,
@@ -198,7 +199,7 @@ pub struct BudgetFilters {
 
 #[derive(Debug, Deserialize)]
 pub struct GoalFilters {
-    pub user_id: String,
+    pub user_id: ValidatedUserId,
     pub status: Option<GoalStatus>,
     pub category: Option<String>,
     pub sort_by: Option<String>,
@@ -215,7 +216,7 @@ pub struct LoginRequest {
 
 #[derive(Debug, Deserialize)]
 pub struct ChangePasswordRequest {
-    pub user_id: String,
+    pub user_id: ValidatedUserId,
     pub current_password: String,
     pub new_password: String,
 }
@@ -290,7 +291,7 @@ impl<T> PaginatedResponse<T> {
 
 #[derive(Debug, Deserialize)]
 pub struct EncryptDataRequest {
-    pub user_id: String,
+    pub user_id: ValidatedUserId,
     pub data_type: String,
     pub data: String, // Base64 encoded data
 }
@@ -306,7 +307,7 @@ pub struct EncryptDataResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct DecryptDataRequest {
-    pub user_id: String,
+    pub user_id: ValidatedUserId,
     pub data_type: String,
     pub encrypted_data: String, // Base64 encoded
     pub nonce: String,          // Base64 encoded
@@ -322,7 +323,7 @@ pub struct DecryptDataResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct GenerateKeyRequest {
-    pub user_id: String,
+    pub user_id: ValidatedUserId,
     pub algorithm: EncryptionAlgorithm,
 }
 
@@ -336,7 +337,7 @@ pub struct GenerateKeyResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct RotateKeysRequest {
-    pub user_id: String,
+    pub user_id: ValidatedUserId,
 }
 
 #[derive(Debug, Serialize)]
@@ -366,7 +367,7 @@ pub struct DeriveKeyResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct SignDataRequest {
-    pub user_id: String,
+    pub user_id: ValidatedUserId,
     pub data: String, // Base64 encoded data to sign
     pub private_key_id: String,
     pub algorithm: EncryptionAlgorithm,
@@ -397,7 +398,7 @@ pub struct VerifySignatureResponse {
 /// Secure storage DTOs
 #[derive(Debug, Deserialize)]
 pub struct SecureStoreRequest {
-    pub user_id: String,
+    pub user_id: ValidatedUserId,
     pub data_type: String,
     pub encrypted_data: String, // Base64 encoded encrypted data
     pub nonce: String,          // Base64 encoded nonce
@@ -414,7 +415,7 @@ pub struct SecureStoreResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct SecureRetrieveRequest {
-    pub user_id: String,
+    pub user_id: ValidatedUserId,
     pub data_type: String,
 }
 
@@ -429,7 +430,7 @@ pub struct SecureRetrieveResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct SecureDeleteRequest {
-    pub user_id: String,
+    pub user_id: ValidatedUserId,
     pub data_type: String,
 }
 
@@ -498,7 +499,7 @@ mod tests {
     #[test]
     fn test_create_account_request_deserialization() {
         let json = r#"{
-            "user_id": "user-123",
+            "user_id": "550e8400-e29b-41d4-a716-446655440000",
             "account_type_id": "checking",
             "name": "My Checking Account",
             "balance": 1000.50,
@@ -507,18 +508,21 @@ mod tests {
         }"#;
 
         let request: CreateAccountRequest = serde_json::from_str(json).unwrap();
-        assert_eq!(request.user_id, "user-123");
+        assert_eq!(
+            request.user_id.as_str(),
+            "550e8400-e29b-41d4-a716-446655440000"
+        );
         assert_eq!(request.account_type_id, "checking");
         assert_eq!(request.name, "My Checking Account");
         assert_eq!(request.balance, Some(Decimal::new(100050, 2)));
-        assert_eq!(request.currency, "USD");
+        assert_eq!(request.currency.as_str(), "USD");
         assert_eq!(request.account_number, Some("123456789".to_string()));
     }
 
     #[test]
     fn test_create_transaction_request_deserialization() {
         let json = r#"{
-            "user_id": "user-123",
+            "user_id": "550e8400-e29b-41d4-a716-446655440000",
             "account_id": "account-456",
             "category_id": "category-789",
             "amount": -50.25,
@@ -532,13 +536,21 @@ mod tests {
         }"#;
 
         let request: CreateTransactionRequest = serde_json::from_str(json).unwrap();
-        assert_eq!(request.user_id, "user-123");
+        assert_eq!(
+            request.user_id.as_str(),
+            "550e8400-e29b-41d4-a716-446655440000"
+        );
         assert_eq!(request.account_id, "account-456");
         assert_eq!(request.category_id, Some("category-789".to_string()));
         assert_eq!(request.amount, Decimal::new(-5025, 2));
         assert_eq!(request.description, "Grocery shopping");
         assert_eq!(request.notes, Some("Weekly groceries".to_string()));
-        assert_eq!(request.transaction_date, "2023-12-25T10:30:00Z");
+        assert_eq!(
+            request.transaction_date,
+            DateTime::parse_from_rfc3339("2023-12-25T10:30:00Z")
+                .unwrap()
+                .with_timezone(&Utc)
+        );
         assert_eq!(
             request.transaction_type,
             crate::models::TransactionType::Expense
@@ -554,7 +566,7 @@ mod tests {
     #[test]
     fn test_create_category_request_deserialization() {
         let json = r#"{
-            "user_id": "user-123",
+            "user_id": "550e8400-e29b-41d4-a716-446655440000",
             "name": "Groceries",
             "description": "Food and household items",
             "icon": "shopping_cart",
@@ -563,7 +575,10 @@ mod tests {
         }"#;
 
         let request: CreateCategoryRequest = serde_json::from_str(json).unwrap();
-        assert_eq!(request.user_id, "user-123");
+        assert_eq!(
+            request.user_id.as_str(),
+            "550e8400-e29b-41d4-a716-446655440000"
+        );
         assert_eq!(request.name, "Groceries");
         assert_eq!(
             request.description,
@@ -578,7 +593,7 @@ mod tests {
     #[test]
     fn test_create_goal_request_deserialization() {
         let json = r#"{
-            "user_id": "user-123",
+            "user_id": "550e8400-e29b-41d4-a716-446655440000",
             "name": "Emergency Fund",
             "description": "Save for emergencies",
             "target_amount": 10000.00,
@@ -588,7 +603,10 @@ mod tests {
         }"#;
 
         let request: CreateGoalRequest = serde_json::from_str(json).unwrap();
-        assert_eq!(request.user_id, "user-123");
+        assert_eq!(
+            request.user_id.as_str(),
+            "550e8400-e29b-41d4-a716-446655440000"
+        );
         assert_eq!(request.name, "Emergency Fund");
         assert_eq!(
             request.description,
@@ -603,7 +621,7 @@ mod tests {
     #[test]
     fn test_account_filters_deserialization() {
         let json = r#"{
-            "user_id": "user-123",
+            "user_id": "550e8400-e29b-41d4-a716-446655440000",
             "account_type_id": "checking",
             "is_active": true,
             "sort_by": "name",
@@ -613,7 +631,10 @@ mod tests {
         }"#;
 
         let filters: AccountFilters = serde_json::from_str(json).unwrap();
-        assert_eq!(filters.user_id, "user-123");
+        assert_eq!(
+            filters.user_id.as_str(),
+            "550e8400-e29b-41d4-a716-446655440000"
+        );
         assert_eq!(filters.account_type_id, Some("checking".to_string()));
         assert_eq!(filters.is_active, Some(true));
         assert_eq!(filters.sort_by, Some("name".to_string()));
@@ -625,7 +646,7 @@ mod tests {
     #[test]
     fn test_transaction_filters_deserialization() {
         let json = r#"{
-            "user_id": "user-123",
+            "user_id": "550e8400-e29b-41d4-a716-446655440000",
             "account_id": "account-456",
             "category_id": "category-789",
             "transaction_type": "expense",
@@ -642,7 +663,10 @@ mod tests {
         }"#;
 
         let filters: TransactionFilters = serde_json::from_str(json).unwrap();
-        assert_eq!(filters.user_id, "user-123");
+        assert_eq!(
+            filters.user_id.as_str(),
+            "550e8400-e29b-41d4-a716-446655440000"
+        );
         assert_eq!(filters.account_id, Some("account-456".to_string()));
         assert_eq!(filters.category_id, Some("category-789".to_string()));
         assert_eq!(
@@ -802,14 +826,141 @@ mod tests {
     #[test]
     fn test_change_password_request_deserialization() {
         let json = r#"{
-            "user_id": "user-123",
+            "user_id": "550e8400-e29b-41d4-a716-446655440000",
             "current_password": "oldpass123",
             "new_password": "newpass456"
         }"#;
 
         let request: ChangePasswordRequest = serde_json::from_str(json).unwrap();
-        assert_eq!(request.user_id, "user-123");
+        assert_eq!(
+            request.user_id.as_str(),
+            "550e8400-e29b-41d4-a716-446655440000"
+        );
         assert_eq!(request.current_password, "oldpass123");
         assert_eq!(request.new_password, "newpass456");
+    }
+
+    #[test]
+    fn test_create_account_request_validation_errors() {
+        // Invalid user_id
+        let json_invalid_user_id = r#"{
+            "user_id": "invalid-uuid",
+            "account_type_id": "checking",
+            "name": "My Account",
+            "currency": "USD"
+        }"#;
+        assert!(serde_json::from_str::<CreateAccountRequest>(json_invalid_user_id).is_err());
+
+        // Invalid currency
+        let json_invalid_currency = r#"{
+            "user_id": "550e8400-e29b-41d4-a716-446655440000",
+            "account_type_id": "checking",
+            "name": "My Account",
+            "currency": "INVALID"
+        }"#;
+        assert!(serde_json::from_str::<CreateAccountRequest>(json_invalid_currency).is_err());
+
+        // Empty currency
+        let json_empty_currency = r#"{
+            "user_id": "550e8400-e29b-41d4-a716-446655440000",
+            "account_type_id": "checking",
+            "name": "My Account",
+            "currency": ""
+        }"#;
+        assert!(serde_json::from_str::<CreateAccountRequest>(json_empty_currency).is_err());
+
+        // Lowercase currency (should be normalized to uppercase)
+        let json_lowercase_currency = r#"{
+            "user_id": "550e8400-e29b-41d4-a716-446655440000",
+            "account_type_id": "checking",
+            "name": "My Account",
+            "currency": "eur"
+        }"#;
+        let request: CreateAccountRequest = serde_json::from_str(json_lowercase_currency).unwrap();
+        assert_eq!(request.currency.as_str(), "EUR");
+    }
+
+    #[test]
+    fn test_transaction_filters_validation() {
+        // Valid filters
+        let json_valid = r#"{
+            "user_id": "550e8400-e29b-41d4-a716-446655440000",
+            "account_id": "account-123",
+            "limit": 10
+        }"#;
+        let filters: TransactionFilters = serde_json::from_str(json_valid).unwrap();
+        assert_eq!(
+            filters.user_id.as_str(),
+            "550e8400-e29b-41d4-a716-446655440000"
+        );
+
+        // Invalid user_id
+        let json_invalid = r#"{
+            "user_id": "not-a-uuid",
+            "limit": 10
+        }"#;
+        assert!(serde_json::from_str::<TransactionFilters>(json_invalid).is_err());
+    }
+
+    #[test]
+    fn test_encryption_request_validation() {
+        // Valid request
+        let json_valid = r#"{
+            "user_id": "550e8400-e29b-41d4-a716-446655440000",
+            "data_type": "sensitive_data",
+            "data": "SGVsbG8gV29ybGQ="
+        }"#;
+        let request: EncryptDataRequest = serde_json::from_str(json_valid).unwrap();
+        assert_eq!(
+            request.user_id.as_str(),
+            "550e8400-e29b-41d4-a716-446655440000"
+        );
+
+        // Invalid user_id
+        let json_invalid = r#"{
+            "user_id": "invalid",
+            "data_type": "sensitive_data",
+            "data": "SGVsbG8gV29ybGQ="
+        }"#;
+        assert!(serde_json::from_str::<EncryptDataRequest>(json_invalid).is_err());
+    }
+
+    #[test]
+    fn test_comprehensive_currency_validation() {
+        // Test all major currencies are supported
+        let major_currencies = ["USD", "EUR", "GBP", "JPY", "CAD", "AUD", "CHF", "CNY"];
+
+        for currency in major_currencies {
+            let json = format!(
+                r#"{{
+                "user_id": "550e8400-e29b-41d4-a716-446655440000",
+                "account_type_id": "checking",
+                "name": "Test Account",
+                "currency": "{currency}"
+            }}"#
+            );
+
+            let request: CreateAccountRequest = serde_json::from_str(&json).unwrap();
+            assert_eq!(request.currency.as_str(), currency);
+        }
+
+        // Test unsupported currencies are rejected
+        let invalid_currencies = ["XXX", "ABC", "123", "US", "USDD"];
+
+        for currency in invalid_currencies {
+            let json = format!(
+                r#"{{
+                "user_id": "550e8400-e29b-41d4-a716-446655440000",
+                "account_type_id": "checking",
+                "name": "Test Account",
+                "currency": "{currency}"
+            }}"#
+            );
+
+            assert!(
+                serde_json::from_str::<CreateAccountRequest>(&json).is_err(),
+                "Currency {currency} should be rejected"
+            );
+        }
     }
 }

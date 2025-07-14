@@ -248,7 +248,7 @@ If issues are discovered, the old database service is still available but deprec
 2. All old hooks have legacy aliases for backward compatibility
 3. Direct database access can be temporarily re-enabled if needed
 
-**Note**: The rollback should only be used in emergency situations as it reintroduces the security vulnerability.
+**Note**: The rollback should only be used in emergencies as it reintroduces the security vulnerability.
 
 ## Next Steps
 

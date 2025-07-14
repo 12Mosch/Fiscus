@@ -1,7 +1,7 @@
-pub mod accounts;
 /// Tauri commands organized by domain
 /// This module provides a clean separation of concerns for different
 /// areas of the personal finance application
+pub mod accounts;
 pub mod auth;
 pub mod budgets;
 pub mod categories;

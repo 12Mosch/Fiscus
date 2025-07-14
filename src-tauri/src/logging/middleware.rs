@@ -273,6 +273,7 @@ where
 }
 
 /// Database operation logging helper
+#[derive(Debug)]
 pub struct DatabaseLogger {
     sanitizer: DataSanitizer,
 }

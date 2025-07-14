@@ -7,11 +7,19 @@ use crate::error::{FiscusError, FiscusResult, SecurityValidator};
 use crate::logging::DatabaseLogger;
 
 // Sub-modules
+pub mod config;
+pub mod connection;
 pub mod encrypted;
 pub mod secure_storage_repository;
+pub mod sqlite;
 
-/// Database connection type alias
-pub type Database = String;
+// Re-exports for convenience
+pub use config::{DatabaseConfig, DatabaseType};
+pub use connection::{ConnectionManager, DatabaseConnection, PoolStats};
+pub use sqlite::{SQLiteManager, SQLiteStats};
+
+/// Database connection type - now uses proper connection management
+pub type Database = DatabaseConnection;
 
 /// Database utilities and helper functions
 pub struct DatabaseUtils;
@@ -19,7 +27,7 @@ pub struct DatabaseUtils;
 impl DatabaseUtils {
     /// Execute a query with parameters and return results
     pub async fn execute_query<T>(
-        _db: &Database,
+        db: &Database,
         query: &str,
         params: Vec<Value>,
     ) -> FiscusResult<Vec<T>>
@@ -32,12 +40,26 @@ impl DatabaseUtils {
         debug!(
             query = query,
             param_count = params.len(),
+            connection_id = %db.connection_id,
+            database_url = %db.url,
             "Executing database query"
         );
 
-        // TODO: Implement proper database query execution
-        // This is a placeholder to allow compilation
-        let result: FiscusResult<Vec<T>> = Ok(Vec::new());
+        // For local SQLite with Tauri SQL plugin
+        // Note: The actual Tauri SQL plugin calls would be made from the frontend
+        // This backend provides the connection management and logging
+        let result: FiscusResult<Vec<T>> = {
+            // Validate SQLite-specific constraints
+            if db.db_type != DatabaseType::SQLite {
+                return Err(FiscusError::InvalidInput(
+                    "Only SQLite is supported for local operations".to_string(),
+                ));
+            }
+
+            // For now, return empty result as the actual SQL execution
+            // happens through the Tauri SQL plugin on the frontend
+            Ok(Vec::new())
+        };
 
         let duration = start_time.elapsed();
 
@@ -67,7 +89,7 @@ impl DatabaseUtils {
 
     /// Execute a single query and return the first result
     pub async fn execute_query_single<T>(
-        _db: &Database,
+        db: &Database,
         query: &str,
         params: Vec<Value>,
     ) -> FiscusResult<Option<T>>
@@ -80,12 +102,24 @@ impl DatabaseUtils {
         debug!(
             query = query,
             param_count = params.len(),
+            connection_id = %db.connection_id,
+            database_url = %db.url,
             "Executing single database query"
         );
 
-        // TODO: Implement proper database query execution
-        // This is a placeholder to allow compilation
-        let result: FiscusResult<Option<T>> = Ok(None);
+        // For local SQLite with Tauri SQL plugin
+        let result: FiscusResult<Option<T>> = {
+            // Validate SQLite-specific constraints
+            if db.db_type != DatabaseType::SQLite {
+                return Err(FiscusError::InvalidInput(
+                    "Only SQLite is supported for local operations".to_string(),
+                ));
+            }
+
+            // For now, return None as the actual SQL execution
+            // happens through the Tauri SQL plugin on the frontend
+            Ok(None)
+        };
 
         let duration = start_time.elapsed();
 
@@ -115,7 +149,7 @@ impl DatabaseUtils {
 
     /// Execute an insert/update/delete query and return affected rows
     pub async fn execute_non_query(
-        _db: &Database,
+        db: &Database,
         query: &str,
         params: Vec<Value>,
     ) -> FiscusResult<u64> {
@@ -125,12 +159,24 @@ impl DatabaseUtils {
         debug!(
             query = query,
             param_count = params.len(),
+            connection_id = %db.connection_id,
+            database_url = %db.url,
             "Executing non-query database operation"
         );
 
-        // TODO: Implement proper database query execution
-        // This is a placeholder to allow compilation
-        let result: FiscusResult<u64> = Ok(0);
+        // For local SQLite with Tauri SQL plugin
+        let result: FiscusResult<u64> = {
+            // Validate SQLite-specific constraints
+            if db.db_type != DatabaseType::SQLite {
+                return Err(FiscusError::InvalidInput(
+                    "Only SQLite is supported for local operations".to_string(),
+                ));
+            }
+
+            // For now, return 0 as the actual SQL execution
+            // happens through the Tauri SQL plugin on the frontend
+            Ok(0)
+        };
 
         let duration = start_time.elapsed();
 
@@ -313,19 +359,23 @@ impl DatabaseUtils {
     }
 
     /// Begin a database transaction
-    pub async fn begin_transaction(_db: &Database) -> FiscusResult<()> {
+    pub async fn begin_transaction(db: &Database) -> FiscusResult<()> {
         let db_logger = DatabaseLogger::new();
         db_logger.log_transaction_start();
 
-        info!("Database transaction started");
+        info!(
+            connection_id = %db.connection_id,
+            database_url = %db.url,
+            "Database transaction started"
+        );
 
-        // TODO: Implement proper transaction handling
+        // TODO: Implement proper transaction handling using Tauri SQL plugin
         // This is a placeholder to allow compilation
         Ok(())
     }
 
     /// Commit a database transaction
-    pub async fn commit_transaction(_db: &Database) -> FiscusResult<()> {
+    pub async fn commit_transaction(db: &Database) -> FiscusResult<()> {
         let start_time = Instant::now();
         let db_logger = DatabaseLogger::new();
 
@@ -340,6 +390,8 @@ impl DatabaseUtils {
                 db_logger.log_transaction_commit(duration);
                 info!(
                     duration_ms = duration.as_millis(),
+                    connection_id = %db.connection_id,
+                    database_url = %db.url,
                     "Database transaction committed successfully"
                 );
             }
@@ -356,10 +408,16 @@ impl DatabaseUtils {
     }
 
     /// Rollback a database transaction
-    pub async fn rollback_transaction(_db: &Database) -> FiscusResult<()> {
+    pub async fn rollback_transaction(db: &Database) -> FiscusResult<()> {
         let db_logger = DatabaseLogger::new();
 
-        // TODO: Implement proper transaction handling
+        info!(
+            connection_id = %db.connection_id,
+            database_url = %db.url,
+            "Database transaction rolled back"
+        );
+
+        // TODO: Implement proper transaction handling using Tauri SQL plugin
         // This is a placeholder to allow compilation
         let result = Ok(());
 
@@ -631,7 +689,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_query_placeholder() {
-        let db = "test_db".to_string();
+        let db = DatabaseConnection::new("test_db".to_string(), DatabaseType::SQLite);
         let query = "SELECT * FROM users";
         let params = vec![];
 
@@ -645,7 +703,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_query_single_placeholder() {
-        let db = "test_db".to_string();
+        let db = DatabaseConnection::new("test_db".to_string(), DatabaseType::SQLite);
         let query = "SELECT * FROM users WHERE id = ?";
         let params = vec![Value::String("user-123".to_string())];
 
@@ -659,7 +717,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_non_query_placeholder() {
-        let db = "test_db".to_string();
+        let db = DatabaseConnection::new("test_db".to_string(), DatabaseType::SQLite);
         let query = "INSERT INTO users (username) VALUES (?)";
         let params = vec![Value::String("testuser".to_string())];
 
@@ -672,7 +730,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_validate_user_exists_placeholder() {
-        let db = "test_db".to_string();
+        let db = DatabaseConnection::new("test_db".to_string(), DatabaseType::SQLite);
         // deepcode ignore NoHardcodedCredentials: <test>
         let user_id = "user-123";
 
@@ -684,7 +742,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_validate_account_ownership_placeholder() {
-        let db = "test_db".to_string();
+        let db = DatabaseConnection::new("test_db".to_string(), DatabaseType::SQLite);
         let account_id = "account-123";
         // deepcode ignore NoHardcodedCredentials: <test>
         let user_id = "user-456";
@@ -696,7 +754,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_validate_category_ownership_placeholder() {
-        let db = "test_db".to_string();
+        let db = DatabaseConnection::new("test_db".to_string(), DatabaseType::SQLite);
         // deepcode ignore NoHardcodedCredentials: <test>
         let category_id = "category-123";
         // deepcode ignore NoHardcodedCredentials: <test>
@@ -709,7 +767,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_account_balance_placeholder() {
-        let db = "test_db".to_string();
+        let db = DatabaseConnection::new("test_db".to_string(), DatabaseType::SQLite);
         let account_id = "account-123";
 
         let result = DatabaseUtils::get_account_balance(&db, account_id).await;
@@ -720,7 +778,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_account_balance_placeholder() {
-        let db = "test_db".to_string();
+        let db = DatabaseConnection::new("test_db".to_string(), DatabaseType::SQLite);
         let account_id = "account-123";
         let new_balance = rust_decimal::Decimal::new(100000, 2); // $1000.00
 
@@ -731,7 +789,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_transaction_operations_placeholder() {
-        let db = "test_db".to_string();
+        let db = DatabaseConnection::new("test_db".to_string(), DatabaseType::SQLite);
 
         // Test begin transaction
         let result = DatabaseUtils::begin_transaction(&db).await;

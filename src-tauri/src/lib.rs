@@ -39,7 +39,8 @@ pub fn run() {
     // Initialize encryption service
     if let Err(e) = commands::encryption::initialize_encryption_service() {
         tracing::error!("Failed to initialize encryption service: {e}");
-        // Continue without encryption rather than crash
+        // Encryption is critical for security - fail fast
+        panic!("Failed to initialize encryption service: {e}");
     } else {
         tracing::info!("Encryption service initialized successfully");
     }

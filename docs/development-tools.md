@@ -67,22 +67,6 @@ Test coverage includes:
 - Warning message logging
 - Environment variable handling
 
-### DatabaseSeeder Component (Removed)
-
-The `DatabaseSeeder` component has been **removed** as part of the security migration. Database seeding functionality is no longer available through the UI.
-
-#### Migration to Secure API Service
-
-For development data creation, use the secure API service programmatically:
-
-```typescript
-import { apiService } from '@/lib/api-service';
-
-// Create test data using the secure API
-const account = await apiService.accounts.create(accountData);
-const transaction = await apiService.transactions.create(transactionData);
-```
-
 ## Development Routes
 
 ### `/dev` Route
@@ -90,7 +74,6 @@ const transaction = await apiService.transactions.create(transactionData);
 The development route (`src/routes/dev.tsx`) provides access to all development tools:
 
 - Database testing utilities
-- Database seeding interface
 - Development environment information
 - Debug component showcase
 

@@ -33,12 +33,13 @@ CREATE INDEX idx_secure_storage_expires_at ON secure_storage(expires_at) WHERE e
 CREATE INDEX idx_secure_storage_last_accessed ON secure_storage(last_accessed_at);
 
 -- Trigger to update the updated_at timestamp
-CREATE TRIGGER secure_storage_updated_at 
+CREATE TRIGGER secure_storage_updated_at
     AFTER UPDATE ON secure_storage
     FOR EACH ROW
+    WHEN NEW.updated_at = OLD.updated_at
 BEGIN
-    UPDATE secure_storage 
-    SET updated_at = CURRENT_TIMESTAMP 
+    UPDATE secure_storage
+    SET updated_at = CURRENT_TIMESTAMP
     WHERE id = NEW.id;
 END;
 
@@ -46,9 +47,10 @@ END;
 CREATE TRIGGER secure_storage_access_tracking
     AFTER UPDATE OF access_count ON secure_storage
     FOR EACH ROW
+    WHEN NEW.access_count != OLD.access_count
 BEGIN
-    UPDATE secure_storage 
-    SET last_accessed_at = CURRENT_TIMESTAMP 
+    UPDATE secure_storage
+    SET last_accessed_at = CURRENT_TIMESTAMP
     WHERE id = NEW.id;
 END;
 

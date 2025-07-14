@@ -27,34 +27,45 @@ pub async fn create_user(
         Validator::validate_email(email)?;
     }
 
-    // Check if username already exists
-    let existing_user_query = "SELECT id FROM users WHERE username = ?1";
-    let existing_user: Option<std::collections::HashMap<String, Value>> =
-        DatabaseUtils::execute_query_single(
-            &db,
-            existing_user_query,
+    // Check if username or email already exists in a single query to prevent timing attacks
+    let (conflict_check_query, params) = if let Some(ref email) = request.email {
+        // Check both username and email
+        (
+            "SELECT username, email FROM users WHERE username = ?1 OR email = ?2",
+            vec![
+                Value::String(request.username.clone()),
+                Value::String(email.clone()),
+            ],
+        )
+    } else {
+        // Check only username
+        (
+            "SELECT username, email FROM users WHERE username = ?1",
             vec![Value::String(request.username.clone())],
         )
-        .await?;
+    };
 
-    if existing_user.is_some() {
-        return Err(FiscusError::Conflict("Username already exists".to_string()));
-    }
+    let existing_user: Option<std::collections::HashMap<String, Value>> =
+        DatabaseUtils::execute_query_single(&db, conflict_check_query, params).await?;
 
-    // Check if email already exists (if provided)
-    if let Some(ref email) = request.email {
-        let existing_email_query = "SELECT id FROM users WHERE email = ?1";
-        let existing_email: Option<std::collections::HashMap<String, Value>> =
-            DatabaseUtils::execute_query_single(
-                &db,
-                existing_email_query,
-                vec![Value::String(email.clone())],
-            )
-            .await?;
-
-        if existing_email.is_some() {
-            return Err(FiscusError::Conflict("Email already exists".to_string()));
+    if let Some(user_data) = existing_user {
+        // Determine which field caused the conflict
+        if let Some(existing_username) = user_data.get("username") {
+            if existing_username == &Value::String(request.username.clone()) {
+                return Err(FiscusError::Conflict("Username already exists".to_string()));
+            }
         }
+
+        if let Some(ref email) = request.email {
+            if let Some(existing_email) = user_data.get("email") {
+                if existing_email == &Value::String(email.clone()) {
+                    return Err(FiscusError::Conflict("Email already exists".to_string()));
+                }
+            }
+        }
+
+        // Fallback error if we can't determine the specific conflict
+        return Err(FiscusError::Conflict("User already exists".to_string()));
     }
 
     // Hash password
@@ -238,13 +249,27 @@ pub async fn change_password(
 
     // Update password
     let update_query = "UPDATE users SET password_hash = ?1, updated_at = ?2 WHERE id = ?3";
-    let params = vec![
-        Value::String(new_password_hash),
-        Value::String(chrono::Utc::now().to_rfc3339()),
-        Value::String(request.user_id.as_str()),
+
+    // Use encrypted parameter mapping for sensitive fields
+    let now = chrono::Utc::now().to_rfc3339();
+    let params_with_mapping = vec![
+        (
+            "password_hash".to_string(),
+            Value::String(new_password_hash),
+        ),
+        ("updated_at".to_string(), Value::String(now)),
+        ("id".to_string(), Value::String(request.user_id.to_string())),
     ];
 
-    let affected_rows = DatabaseUtils::execute_non_query(&db, update_query, params).await?;
+    let encrypted_params = EncryptedDatabaseUtils::encrypt_params_with_mapping(
+        params_with_mapping,
+        &request.user_id.as_str(),
+        "users",
+    )
+    .await?;
+
+    let affected_rows =
+        DatabaseUtils::execute_non_query(&db, update_query, encrypted_params).await?;
 
     Ok(affected_rows > 0)
 }

@@ -57,7 +57,10 @@ pub struct SecureStorageService {
 impl SecureStorageService {
     /// Create a new secure storage service
     #[allow(dead_code)] // Public API method
-    pub fn new(db: String, config: Option<SecureStorageConfig>) -> Self {
+    pub fn new(
+        db: crate::database::DatabaseConnection,
+        config: Option<SecureStorageConfig>,
+    ) -> Self {
         let repository = Arc::new(SecureStorageRepository::new(db));
         let config = Arc::new(RwLock::new(config.unwrap_or_default()));
 
@@ -248,7 +251,7 @@ static SECURE_STORAGE_SERVICE: tokio::sync::OnceCell<
 /// Initialize the global secure storage service
 #[allow(dead_code)] // Public API function
 pub async fn initialize_secure_storage_service(
-    db: String,
+    db: crate::database::DatabaseConnection,
     config: Option<SecureStorageConfig>,
 ) -> FiscusResult<()> {
     let mut service = SecureStorageService::new(db, config);

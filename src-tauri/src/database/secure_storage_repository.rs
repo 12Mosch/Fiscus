@@ -412,7 +412,9 @@ mod tests {
 
     fn create_test_repository() -> SecureStorageRepository {
         // Use in-memory SQLite for testing
-        SecureStorageRepository::new(":memory:".to_string())
+        use crate::database::{DatabaseConnection, DatabaseType};
+        let conn = DatabaseConnection::new(":memory:".to_string(), DatabaseType::SQLite);
+        SecureStorageRepository::new(conn)
     }
 
     fn generate_test_data() -> (String, String, String, String, String) {

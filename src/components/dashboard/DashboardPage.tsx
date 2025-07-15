@@ -12,17 +12,17 @@ import {
 	TrendingDown,
 	TrendingUp,
 } from "lucide-react";
-import {
-	mockAccounts,
-	mockBalanceHistory,
-	mockBudgets,
-	mockDashboardStats,
-	mockIncomeExpenseHistory,
-	mockSpendingCategories,
-	mockTransactions,
-} from "@/data/mockData";
 import { useBudgetSummary } from "@/hooks/use-budget-summary";
 import { useChartData } from "@/hooks/use-chart-data";
+import {
+	useAccountBalanceHistory,
+	useAccounts,
+	useBudgets,
+	useDashboardStats,
+	useMonthlySpendingTrend,
+	useRecentTransactions,
+	useSpendingByCategory,
+} from "@/hooks/use-dashboard-data";
 import { useDashboardMetrics } from "@/hooks/use-dashboard-metrics";
 import { BarChart } from "../charts/BarChart";
 import { LineChart } from "../charts/LineChart";
@@ -33,15 +33,51 @@ import { FinancialCard } from "./FinancialCard";
 import { TransactionList } from "./TransactionList";
 
 export function DashboardPage() {
-	const stats = mockDashboardStats;
+	// Fetch real data using custom hooks
+	const { accounts, loading: accountsLoading } = useAccounts();
+	const { transactions, loading: transactionsLoading } =
+		useRecentTransactions(8);
+	const { budgets, loading: budgetsLoading } = useBudgets();
+	const { dashboardStats, loading: statsLoading } = useDashboardStats();
+	const { balanceHistory, loading: balanceLoading } =
+		useAccountBalanceHistory(30);
+	const { spendingCategories, loading: spendingLoading } =
+		useSpendingByCategory("monthly");
+	const { monthlyTrend, loading: trendLoading } = useMonthlySpendingTrend(6);
 
 	// Use custom hooks for calculations
-	const dashboardMetrics = useDashboardMetrics(stats);
-	const budgetSummary = useBudgetSummary(mockBudgets);
-	const incomeChartData = useChartData(mockIncomeExpenseHistory, {
+	const dashboardMetrics = useDashboardMetrics(dashboardStats);
+	const budgetSummary = useBudgetSummary(budgets);
+	const incomeChartData = useChartData(monthlyTrend, {
 		labelFilter: "Income",
 		limit: 6,
 	});
+
+	// Overall loading state
+	const isLoading =
+		accountsLoading ||
+		transactionsLoading ||
+		budgetsLoading ||
+		statsLoading ||
+		balanceLoading ||
+		spendingLoading ||
+		trendLoading;
+
+	// Show loading state
+	if (isLoading) {
+		return (
+			<div className="space-y-6">
+				<div className="flex items-center justify-center h-64">
+					<div className="text-center">
+						<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+						<p className="text-gray-600 dark:text-gray-400">
+							Loading dashboard...
+						</p>
+					</div>
+				</div>
+			</div>
+		);
+	}
 
 	return (
 		<div className="space-y-6">
@@ -66,7 +102,7 @@ export function DashboardPage() {
 			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 				<FinancialCard
 					title="Total Balance"
-					value={stats.totalBalance}
+					value={dashboardStats.totalBalance}
 					change={{
 						value: 2.5,
 						type: "increase",
@@ -77,7 +113,7 @@ export function DashboardPage() {
 
 				<FinancialCard
 					title="Monthly Income"
-					value={stats.monthlyIncome}
+					value={dashboardStats.monthlyIncome}
 					change={{
 						value: 1.2,
 						type: "increase",
@@ -88,7 +124,7 @@ export function DashboardPage() {
 
 				<FinancialCard
 					title="Monthly Expenses"
-					value={stats.monthlyExpenses}
+					value={dashboardStats.monthlyExpenses}
 					change={{
 						value: 3.1,
 						type: "decrease",
@@ -99,7 +135,7 @@ export function DashboardPage() {
 
 				<FinancialCard
 					title="Savings Rate"
-					value={`${stats.savingsRate}%`}
+					value={`${dashboardStats.savingsRate.toFixed(1)}%`}
 					change={{
 						value: 4.2,
 						type: "increase",
@@ -112,7 +148,7 @@ export function DashboardPage() {
 			{/* Charts Row */}
 			<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 				<LineChart
-					data={mockBalanceHistory}
+					data={balanceHistory}
 					title="Account Balance Trend"
 					color="#3b82f6"
 					height={300}
@@ -136,7 +172,7 @@ export function DashboardPage() {
 							Your Accounts
 						</h2>
 						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-							{mockAccounts.slice(0, 4).map((account) => (
+							{accounts.slice(0, 4).map((account) => (
 								<AccountCard key={account.id} account={account} />
 							))}
 						</div>
@@ -144,7 +180,7 @@ export function DashboardPage() {
 
 					{/* Recent Transactions */}
 					<TransactionList
-						transactions={mockTransactions}
+						transactions={transactions}
 						limit={8}
 						showAccount={true}
 					/>
@@ -153,11 +189,11 @@ export function DashboardPage() {
 				{/* Right Column - Budget and Spending */}
 				<div className="space-y-6">
 					{/* Budget Overview */}
-					<BudgetOverview budgets={mockBudgets} />
+					<BudgetOverview budgets={budgets} />
 
 					{/* Spending Breakdown */}
 					<PieChart
-						data={mockSpendingCategories}
+						data={spendingCategories}
 						title="Spending by Category"
 						height={400}
 					/>
@@ -258,10 +294,10 @@ export function DashboardPage() {
 							<Activity className="h-4 w-4 text-blue-500" />
 							<div>
 								<p className="text-sm font-medium text-gray-900 dark:text-white">
-									{mockTransactions.length} Transactions
+									{transactions.length} Transactions
 								</p>
 								<p className="text-xs text-gray-500 dark:text-gray-400">
-									Across {mockAccounts.length} accounts
+									Across {accounts.length} accounts
 								</p>
 							</div>
 						</div>
@@ -269,7 +305,7 @@ export function DashboardPage() {
 							<CreditCard className="h-4 w-4 text-green-500" />
 							<div>
 								<p className="text-sm font-medium text-gray-900 dark:text-white">
-									{mockBudgets.length} Active Budgets
+									{budgets.length} Active Budgets
 								</p>
 								<p className="text-xs text-gray-500 dark:text-gray-400">
 									{budgetSummary.onTrack} on track, {budgetSummary.overLimit}{" "}

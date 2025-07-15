@@ -36,7 +36,7 @@ import {
 	SheetTitle,
 	SheetTrigger,
 } from "@/components/ui/sheet";
-import { mockNotifications } from "@/data/mockData";
+import { useAuth } from "@/stores/auth-store";
 import type { NotificationItem } from "@/types/dashboard";
 
 interface DashboardHeaderProps {
@@ -47,14 +47,11 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
 	const [searchQuery, setSearchQuery] = useState("");
 	const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
 
-	// Mock user data
-	const user = {
-		name: "John Doe",
-		email: "john.doe@example.com",
-		avatar: undefined,
-	};
+	// Get real user data from auth store
+	const { user } = useAuth();
 
-	const unreadNotifications = mockNotifications.filter((n) => !n.read);
+	// For now, use empty notifications array since we don't have a notifications API yet
+	const unreadNotifications: NotificationItem[] = [];
 
 	const handleSearch = (query: string) => {
 		// TODO: Implement actual search functionality
@@ -160,10 +157,10 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
 								<SheetTitle>Notifications</SheetTitle>
 							</SheetHeader>
 							<div className="mt-6 space-y-4">
-								{mockNotifications.length === 0 ? (
+								{unreadNotifications.length === 0 ? (
 									<p className="text-center text-gray-500">No notifications</p>
 								) : (
-									mockNotifications.map((notification) => (
+									unreadNotifications.map((notification) => (
 										<button
 											key={notification.id}
 											type="button"
@@ -201,12 +198,11 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
 						<DropdownMenuTrigger asChild>
 							<Button variant="ghost" className="relative h-8 w-8 rounded-full">
 								<Avatar className="h-8 w-8">
-									<AvatarImage src={user.avatar} alt={user.name} />
+									<AvatarImage src={undefined} alt={user?.username || "User"} />
 									<AvatarFallback>
-										{user.name
-											.split(" ")
-											.map((n) => n[0])
-											.join("")}
+										{user?.username
+											? user.username.slice(0, 2).toUpperCase()
+											: "U"}
 									</AvatarFallback>
 								</Avatar>
 							</Button>
@@ -215,10 +211,10 @@ export function DashboardHeader({ onMenuClick }: DashboardHeaderProps) {
 							<DropdownMenuLabel className="font-normal">
 								<div className="flex flex-col space-y-1">
 									<p className="text-sm font-medium leading-none">
-										{user.name}
+										{user?.username || "User"}
 									</p>
 									<p className="text-xs leading-none text-gray-600 dark:text-gray-400">
-										{user.email}
+										{user?.email || "No email"}
 									</p>
 								</div>
 							</DropdownMenuLabel>

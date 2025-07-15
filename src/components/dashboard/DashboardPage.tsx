@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useBudgetSummary } from "@/hooks/use-budget-summary";
 import { useChartData } from "@/hooks/use-chart-data";
+import { useDashboardChanges } from "@/hooks/use-dashboard-changes";
 import {
 	useAccountBalanceHistory,
 	useAccounts,
@@ -47,6 +48,7 @@ export function DashboardPage() {
 
 	// Use custom hooks for calculations
 	const dashboardMetrics = useDashboardMetrics(dashboardStats);
+	const dashboardChanges = useDashboardChanges();
 	const budgetSummary = useBudgetSummary(budgets);
 	const incomeChartData = useChartData(monthlyTrend, {
 		labelFilter: "Income",
@@ -103,44 +105,28 @@ export function DashboardPage() {
 				<FinancialCard
 					title="Total Balance"
 					value={dashboardStats.totalBalance}
-					change={{
-						value: 2.5,
-						type: "increase",
-						period: "last month",
-					}}
+					change={dashboardChanges.totalBalance || undefined}
 					icon={<DollarSign className="h-5 w-5" />}
 				/>
 
 				<FinancialCard
 					title="Monthly Income"
 					value={dashboardStats.monthlyIncome}
-					change={{
-						value: 1.2,
-						type: "increase",
-						period: "last month",
-					}}
+					change={dashboardChanges.monthlyIncome || undefined}
 					icon={<TrendingUp className="h-5 w-5" />}
 				/>
 
 				<FinancialCard
 					title="Monthly Expenses"
 					value={dashboardStats.monthlyExpenses}
-					change={{
-						value: 3.1,
-						type: "decrease",
-						period: "last month",
-					}}
+					change={dashboardChanges.monthlyExpenses || undefined}
 					icon={<TrendingDown className="h-5 w-5" />}
 				/>
 
 				<FinancialCard
 					title="Savings Rate"
 					value={`${dashboardStats.savingsRate.toFixed(1)}%`}
-					change={{
-						value: 4.2,
-						type: "increase",
-						period: "last month",
-					}}
+					change={dashboardChanges.savingsRate || undefined}
 					icon={<PiggyBank className="h-5 w-5" />}
 				/>
 			</div>

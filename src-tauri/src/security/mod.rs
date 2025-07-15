@@ -10,6 +10,8 @@ use tracing::{debug, info, instrument, warn};
 
 use crate::error::{FiscusError, FiscusResult};
 
+pub mod data_protection;
+
 /// Security context for operations
 #[derive(Debug, Clone)]
 pub struct SecurityContext {

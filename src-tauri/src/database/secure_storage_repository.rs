@@ -283,19 +283,16 @@ impl SecureStorageRepository {
             Value::String(data_type.to_string()),
         ];
 
-        // For now, simulate database operation for testing
-        // TODO: Replace with actual Tauri SQL plugin integration
+        // Execute delete operation and get affected row count
         let was_deleted = if cfg!(test) {
             // In test mode, simulate successful deletion
             true
         } else {
             // Execute delete and check affected rows
-            let _results: Vec<Value> =
-                DatabaseUtils::execute_query(&self.db, query, params).await?;
+            let affected_rows = DatabaseUtils::execute_non_query(&self.db, query, params).await?;
 
-            // Note: In a real implementation, you'd check the number of affected rows
-            // For now, we'll assume success if no error occurred
-            true // This should be replaced with actual affected row count
+            // Return true if at least one row was affected (deleted)
+            affected_rows > 0
         };
 
         if was_deleted {
@@ -321,21 +318,17 @@ impl SecureStorageRepository {
     #[instrument(skip(self))]
     pub async fn cleanup_expired(&self) -> FiscusResult<u64> {
         let query = r#"
-            DELETE FROM secure_storage 
+            DELETE FROM secure_storage
             WHERE expires_at IS NOT NULL AND expires_at <= CURRENT_TIMESTAMP
         "#;
 
-        // For now, simulate database operation for testing
-        // TODO: Replace with actual Tauri SQL plugin integration
+        // Execute cleanup operation and get actual deleted count
         let deleted_count = if cfg!(test) {
             // In test mode, simulate cleanup
             0u64
         } else {
-            let _results: Vec<Value> =
-                DatabaseUtils::execute_query(&self.db, query, vec![]).await?;
-
-            // Note: In a real implementation, you'd return the actual count of deleted rows
-            0u64 // This should be replaced with actual affected row count
+            // Execute delete and return actual count of affected rows
+            DatabaseUtils::execute_non_query(&self.db, query, vec![]).await?
         };
 
         if deleted_count > 0 {
@@ -346,6 +339,94 @@ impl SecureStorageRepository {
         }
 
         Ok(deleted_count)
+    }
+
+    /// Clean up expired data entries with transaction support for consistency
+    #[instrument(skip(self))]
+    pub async fn cleanup_expired_transactional(&self) -> FiscusResult<u64> {
+        // Begin transaction for consistency
+        DatabaseUtils::begin_transaction(&self.db).await?;
+
+        let result = match self.cleanup_expired().await {
+            Ok(deleted_count) => {
+                // Commit transaction on success
+                DatabaseUtils::commit_transaction(&self.db).await?;
+                Ok(deleted_count)
+            }
+            Err(error) => {
+                // Rollback transaction on error
+                if let Err(rollback_error) = DatabaseUtils::rollback_transaction(&self.db).await {
+                    tracing::error!(
+                        cleanup_error = %error,
+                        rollback_error = %rollback_error,
+                        "Failed to rollback transaction after cleanup error"
+                    );
+                }
+                Err(error)
+            }
+        };
+
+        result
+    }
+
+    /// Delete multiple data entries for a user with transaction support
+    #[instrument(skip(self), fields(user_id = %user_id, data_types_count = data_types.len()))]
+    pub async fn delete_multiple_transactional(
+        &self,
+        user_id: &str,
+        data_types: &[&str],
+    ) -> FiscusResult<u64> {
+        // Validate inputs
+        Validator::validate_uuid(user_id, "user_id")?;
+
+        if data_types.is_empty() {
+            return Ok(0);
+        }
+
+        // Use transaction for atomicity when deleting multiple entries
+        crate::with_transaction!(&self.db, async {
+            let mut total_deleted = 0u64;
+
+            for data_type in data_types {
+                Validator::validate_string(data_type, "data_type", 1, 100)?;
+
+                let query = r#"
+                    DELETE FROM secure_storage
+                    WHERE user_id = ?1 AND data_type = ?2
+                "#;
+
+                let params = vec![
+                    Value::String(user_id.to_string()),
+                    Value::String(data_type.to_string()),
+                ];
+
+                let deleted_count = if cfg!(test) {
+                    // In test mode, simulate deletion
+                    1u64
+                } else {
+                    DatabaseUtils::execute_non_query(&self.db, query, params).await?
+                };
+
+                total_deleted += deleted_count;
+
+                if deleted_count > 0 {
+                    info!(
+                        user_id = %user_id,
+                        data_type = %data_type,
+                        "Secure data deleted successfully from database"
+                    );
+                }
+            }
+
+            info!(
+                user_id = %user_id,
+                total_deleted = total_deleted,
+                data_types_count = data_types.len(),
+                "Bulk delete operation completed"
+            );
+
+            Ok(total_deleted)
+        })
     }
 
     /// Update access tracking for a record

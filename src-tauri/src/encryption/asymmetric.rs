@@ -165,7 +165,7 @@ impl AsymmetricEncryption for RsaEncryption {
     ) -> EncryptionResult<EncryptedData> {
         // RSA can only encrypt small amounts of data
         if data.len() > 446 {
-            // 4096/8 - 42 (PKCS#1 v1.5 padding)
+            // RSA-4096 with PKCS#1 v1.5 padding allows max 446 bytes
             return Err(FiscusError::InvalidInput(
                 "Data too large for RSA encryption (max 446 bytes)".to_string(),
             ));
@@ -457,5 +457,264 @@ mod tests {
             .await
             .unwrap();
         assert!(!is_invalid);
+    }
+
+    #[tokio::test]
+    async fn test_rsa_encryption_decryption_roundtrip() {
+        let rsa = RsaEncryption::new().unwrap();
+        let (private_key, public_key) = rsa.generate_keypair().await.unwrap();
+        let test_data = b"Hello, RSA encryption! This is a test message.";
+
+        // Encrypt with public key
+        let encrypted_data = rsa
+            .encrypt_with_public_key(test_data, public_key.key_bytes())
+            .await
+            .unwrap();
+
+        // Verify encrypted data structure
+        assert_eq!(
+            encrypted_data.metadata.algorithm,
+            EncryptionAlgorithm::Rsa4096
+        );
+        assert_eq!(encrypted_data.metadata.key_id, "rsa-public");
+        assert!(encrypted_data.nonce.is_empty()); // RSA doesn't use nonces
+        assert!(encrypted_data.tag.is_none()); // RSA doesn't use authentication tags
+        assert!(!encrypted_data.ciphertext.is_empty());
+
+        // Decrypt with private key
+        let decrypted_data = rsa
+            .decrypt_with_private_key(&encrypted_data, &private_key)
+            .await
+            .unwrap();
+
+        // Verify roundtrip
+        assert_eq!(decrypted_data, test_data);
+    }
+
+    #[tokio::test]
+    async fn test_rsa_encryption_oversized_data() {
+        let rsa = RsaEncryption::new().unwrap();
+        let (_, public_key) = rsa.generate_keypair().await.unwrap();
+
+        // Create data larger than 446 bytes (RSA-4096 limit with PKCS#1 v1.5 padding)
+        let oversized_data = vec![0u8; 500];
+
+        let result = rsa
+            .encrypt_with_public_key(&oversized_data, public_key.key_bytes())
+            .await;
+
+        // Should fail with InvalidInput error
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            FiscusError::InvalidInput(msg) => {
+                assert!(msg.contains("Data too large for RSA encryption"));
+                assert!(msg.contains("max 446 bytes"));
+            }
+            _ => panic!("Expected InvalidInput error for oversized data"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_rsa_decryption_wrong_key() {
+        let rsa = RsaEncryption::new().unwrap();
+
+        // Generate two different key pairs
+        let (_private_key1, public_key1) = rsa.generate_keypair().await.unwrap();
+        let (private_key2, _) = rsa.generate_keypair().await.unwrap();
+
+        let test_data = b"Secret message";
+
+        // Encrypt with first public key
+        let encrypted_data = rsa
+            .encrypt_with_public_key(test_data, public_key1.key_bytes())
+            .await
+            .unwrap();
+
+        // Try to decrypt with second private key (wrong key)
+        let result = rsa
+            .decrypt_with_private_key(&encrypted_data, &private_key2)
+            .await;
+
+        // Should fail with Authentication error
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            FiscusError::Authentication(msg) => {
+                assert!(msg.contains("RSA decryption failed"));
+            }
+            _ => panic!("Expected Authentication error for wrong key"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_rsa_algorithm_mismatch() {
+        let rsa = RsaEncryption::new().unwrap();
+        let (private_key, _) = rsa.generate_keypair().await.unwrap();
+
+        // Create encrypted data with wrong algorithm metadata
+        let wrong_metadata = EncryptionMetadata::new(
+            EncryptionAlgorithm::Aes256Gcm, // Wrong algorithm
+            "test-key".to_string(),
+        );
+
+        let fake_encrypted_data = EncryptedData::new(
+            vec![1, 2, 3, 4], // Dummy ciphertext
+            Vec::new(),
+            None,
+            wrong_metadata,
+        );
+
+        // Try to decrypt with RSA
+        let result = rsa
+            .decrypt_with_private_key(&fake_encrypted_data, &private_key)
+            .await;
+
+        // Should fail with InvalidInput error
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            FiscusError::InvalidInput(msg) => {
+                assert!(msg.contains("Algorithm mismatch for RSA decryption"));
+            }
+            _ => panic!("Expected InvalidInput error for algorithm mismatch"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_rsa_empty_data_encryption() {
+        let rsa = RsaEncryption::new().unwrap();
+        let (private_key, public_key) = rsa.generate_keypair().await.unwrap();
+        let empty_data = &[];
+
+        // Encrypt empty data
+        let encrypted_data = rsa
+            .encrypt_with_public_key(empty_data, public_key.key_bytes())
+            .await
+            .unwrap();
+
+        // Decrypt and verify
+        let decrypted_data = rsa
+            .decrypt_with_private_key(&encrypted_data, &private_key)
+            .await
+            .unwrap();
+
+        assert_eq!(decrypted_data, empty_data);
+        assert!(decrypted_data.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_rsa_maximum_valid_size() {
+        let rsa = RsaEncryption::new().unwrap();
+        let (private_key, public_key) = rsa.generate_keypair().await.unwrap();
+
+        // Create exactly 446 bytes of data (maximum for RSA-4096 with PKCS#1 v1.5)
+        let max_data = vec![0xAB; 446];
+
+        // Should encrypt successfully
+        let encrypted_data = rsa
+            .encrypt_with_public_key(&max_data, public_key.key_bytes())
+            .await
+            .unwrap();
+
+        // Should decrypt successfully
+        let decrypted_data = rsa
+            .decrypt_with_private_key(&encrypted_data, &private_key)
+            .await
+            .unwrap();
+
+        assert_eq!(decrypted_data, max_data);
+    }
+
+    #[tokio::test]
+    async fn test_rsa_boundary_conditions() {
+        let rsa = RsaEncryption::new().unwrap();
+        let (_, public_key) = rsa.generate_keypair().await.unwrap();
+
+        // Test 445 bytes (should work)
+        let valid_data = vec![0xCD; 445];
+        let result = rsa
+            .encrypt_with_public_key(&valid_data, public_key.key_bytes())
+            .await;
+        assert!(result.is_ok(), "445 bytes should encrypt successfully");
+
+        // Test 447 bytes (should fail)
+        let invalid_data = vec![0xEF; 447];
+        let result = rsa
+            .encrypt_with_public_key(&invalid_data, public_key.key_bytes())
+            .await;
+        assert!(result.is_err(), "447 bytes should fail to encrypt");
+
+        match result.unwrap_err() {
+            FiscusError::InvalidInput(msg) => {
+                assert!(msg.contains("Data too large for RSA encryption"));
+            }
+            _ => panic!("Expected InvalidInput error for oversized data"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_rsa_invalid_pem_format() {
+        let rsa = RsaEncryption::new().unwrap();
+
+        // Test with invalid public key PEM
+        let invalid_public_pem =
+            b"-----BEGIN PUBLIC KEY-----\nINVALID_BASE64_DATA\n-----END PUBLIC KEY-----";
+        let test_data = b"test data";
+
+        let result = rsa
+            .encrypt_with_public_key(test_data, invalid_public_pem)
+            .await;
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            FiscusError::InvalidInput(msg) => {
+                assert!(msg.contains("Invalid RSA public key format"));
+            }
+            _ => panic!("Expected InvalidInput error for invalid public key PEM"),
+        }
+
+        // Test with completely malformed PEM
+        let malformed_pem = b"This is not PEM data at all";
+        let result = rsa.encrypt_with_public_key(test_data, malformed_pem).await;
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            FiscusError::InvalidInput(_) => {
+                // Expected - either PEM encoding error or public key format error
+            }
+            _ => panic!("Expected InvalidInput error for malformed PEM"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_rsa_invalid_private_key_pem() {
+        let rsa = RsaEncryption::new().unwrap();
+        let (_, public_key) = rsa.generate_keypair().await.unwrap();
+        let test_data = b"test data";
+
+        // Encrypt some data first
+        let encrypted_data = rsa
+            .encrypt_with_public_key(test_data, public_key.key_bytes())
+            .await
+            .unwrap();
+
+        // Create invalid private key
+        let invalid_private_key = EncryptionKey::new(
+            b"-----BEGIN PRIVATE KEY-----\nINVALID_BASE64_DATA\n-----END PRIVATE KEY-----".to_vec(),
+            KeyType::PrivateKey,
+            EncryptionAlgorithm::Rsa4096,
+            "invalid-key".to_string(),
+        );
+
+        // Try to decrypt with invalid private key
+        let result = rsa
+            .decrypt_with_private_key(&encrypted_data, &invalid_private_key)
+            .await;
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            FiscusError::InvalidInput(msg) => {
+                assert!(msg.contains("Invalid RSA private key format"));
+            }
+            _ => panic!("Expected InvalidInput error for invalid private key PEM"),
+        }
     }
 }

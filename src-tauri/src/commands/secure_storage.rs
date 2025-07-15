@@ -160,6 +160,7 @@ pub async fn secure_get_statistics(
 }
 
 /// Get database connection pool statistics
+#[allow(dead_code)]
 #[tauri::command]
 #[instrument]
 pub async fn get_connection_stats() -> FiscusResult<PoolStats> {
@@ -167,6 +168,7 @@ pub async fn get_connection_stats() -> FiscusResult<PoolStats> {
 }
 
 /// Perform database connection health check
+#[allow(dead_code)]
 #[tauri::command]
 #[instrument]
 pub async fn database_health_check() -> FiscusResult<bool> {
@@ -174,6 +176,7 @@ pub async fn database_health_check() -> FiscusResult<bool> {
 }
 
 /// Clean up idle database connections
+#[allow(dead_code)]
 #[tauri::command]
 #[instrument]
 pub async fn cleanup_idle_connections() -> FiscusResult<usize> {
@@ -181,6 +184,7 @@ pub async fn cleanup_idle_connections() -> FiscusResult<usize> {
 }
 
 /// Get SQLite-specific database statistics
+#[allow(dead_code)]
 #[tauri::command]
 #[instrument]
 pub async fn get_sqlite_stats() -> FiscusResult<SQLiteStats> {
@@ -190,6 +194,7 @@ pub async fn get_sqlite_stats() -> FiscusResult<SQLiteStats> {
 }
 
 /// Optimize SQLite database (VACUUM)
+#[allow(dead_code)]
 #[tauri::command]
 #[instrument]
 pub async fn optimize_sqlite_database() -> FiscusResult<()> {
@@ -199,6 +204,7 @@ pub async fn optimize_sqlite_database() -> FiscusResult<()> {
 }
 
 /// Configure SQLite for optimal local performance
+#[allow(dead_code)]
 #[tauri::command]
 #[instrument]
 pub async fn configure_sqlite_performance() -> FiscusResult<()> {
@@ -208,6 +214,7 @@ pub async fn configure_sqlite_performance() -> FiscusResult<()> {
 }
 
 /// Check SQLite database integrity
+#[allow(dead_code)]
 #[tauri::command]
 #[instrument]
 pub async fn check_sqlite_integrity() -> FiscusResult<bool> {
@@ -217,6 +224,7 @@ pub async fn check_sqlite_integrity() -> FiscusResult<bool> {
 }
 
 /// Backup SQLite database to specified path
+#[allow(dead_code)]
 #[tauri::command]
 #[instrument]
 pub async fn backup_sqlite_database(backup_path: String) -> FiscusResult<()> {
@@ -226,6 +234,7 @@ pub async fn backup_sqlite_database(backup_path: String) -> FiscusResult<()> {
 }
 
 /// Get SQLite database file size
+#[allow(dead_code)]
 #[tauri::command]
 #[instrument]
 pub async fn get_sqlite_database_size() -> FiscusResult<u64> {

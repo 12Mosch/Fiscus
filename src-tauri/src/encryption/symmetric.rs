@@ -14,6 +14,9 @@ use super::nonce_manager::NonceManager;
 use super::types::{
     EncryptedData, EncryptionAlgorithm, EncryptionKey, EncryptionMetadata, EncryptionResult,
 };
+
+#[cfg(test)]
+use super::types::KeyType;
 use super::utils::SecureRandom;
 use crate::error::FiscusError;
 
@@ -329,6 +332,13 @@ impl SymmetricEncryption for ChaCha20Poly1305Encryption {
             ));
         }
 
+        // Validate nonce size
+        if encrypted_data.nonce.len() != 12 {
+            return Err(FiscusError::InvalidInput(
+                "Invalid nonce length for ChaCha20-Poly1305 (expected 12 bytes)".to_string(),
+            ));
+        }
+
         // Create cipher instance
         let key_array = ChaChaKey::from_slice(key.key_bytes());
         let cipher = ChaCha20Poly1305::new(key_array);
@@ -489,5 +499,476 @@ mod tests {
             error_msg.contains("rotation threshold"),
             "Error should mention rotation threshold"
         );
+    }
+
+    // ===== NEGATIVE TEST CASES FOR ERROR HANDLING =====
+
+    #[tokio::test]
+    async fn test_aes_gcm_decrypt_with_wrong_key() {
+        let encryption = AesGcmEncryption::new().unwrap();
+        let correct_key = encryption.generate_key().await.unwrap();
+        let wrong_key = encryption.generate_key().await.unwrap();
+        let data = b"sensitive financial data";
+
+        // Encrypt with correct key
+        let encrypted = encryption.encrypt(data, &correct_key).await.unwrap();
+
+        // Try to decrypt with wrong key - should fail
+        let result = encryption.decrypt(&encrypted, &wrong_key).await;
+        assert!(result.is_err(), "Decryption with wrong key should fail");
+
+        let error = result.unwrap_err();
+        assert!(
+            matches!(error, FiscusError::Authentication(_)),
+            "Should return Authentication error for decryption failure"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_aes_gcm_decrypt_corrupted_ciphertext() {
+        let encryption = AesGcmEncryption::new().unwrap();
+        let key = encryption.generate_key().await.unwrap();
+        let data = b"sensitive financial data";
+
+        // Encrypt data
+        let mut encrypted = encryption.encrypt(data, &key).await.unwrap();
+
+        // Corrupt the ciphertext
+        if !encrypted.ciphertext.is_empty() {
+            encrypted.ciphertext[0] ^= 0xFF; // Flip all bits in first byte
+        }
+
+        // Try to decrypt corrupted data - should fail
+        let result = encryption.decrypt(&encrypted, &key).await;
+        assert!(
+            result.is_err(),
+            "Decryption of corrupted ciphertext should fail"
+        );
+
+        let error = result.unwrap_err();
+        assert!(
+            matches!(error, FiscusError::Authentication(_)),
+            "Should return Authentication error for corrupted ciphertext"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_aes_gcm_decrypt_modified_nonce() {
+        let encryption = AesGcmEncryption::new().unwrap();
+        let key = encryption.generate_key().await.unwrap();
+        let data = b"sensitive financial data";
+
+        // Encrypt data
+        let mut encrypted = encryption.encrypt(data, &key).await.unwrap();
+
+        // Modify the nonce
+        if !encrypted.nonce.is_empty() {
+            encrypted.nonce[0] ^= 0xFF; // Flip all bits in first byte
+        }
+
+        // Try to decrypt with modified nonce - should fail
+        let result = encryption.decrypt(&encrypted, &key).await;
+        assert!(
+            result.is_err(),
+            "Decryption with modified nonce should fail"
+        );
+
+        let error = result.unwrap_err();
+        assert!(
+            matches!(error, FiscusError::Authentication(_)),
+            "Should return Authentication error for modified nonce"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_aes_gcm_algorithm_mismatch() {
+        let encryption = AesGcmEncryption::new().unwrap();
+        let key = encryption.generate_key().await.unwrap();
+        let data = b"sensitive financial data";
+
+        // Encrypt data normally
+        let mut encrypted = encryption.encrypt(data, &key).await.unwrap();
+
+        // Change algorithm in metadata to create mismatch
+        encrypted.metadata.algorithm = EncryptionAlgorithm::ChaCha20Poly1305;
+
+        // Try to decrypt - should fail due to algorithm mismatch
+        let result = encryption.decrypt(&encrypted, &key).await;
+        assert!(
+            result.is_err(),
+            "Decryption with algorithm mismatch should fail"
+        );
+
+        let error = result.unwrap_err();
+        assert!(
+            matches!(error, FiscusError::InvalidInput(_)),
+            "Should return InvalidInput error for algorithm mismatch"
+        );
+        assert!(
+            error.to_string().contains("Algorithm mismatch"),
+            "Error message should mention algorithm mismatch"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_aes_gcm_aad_mismatch() {
+        let encryption = AesGcmEncryption::new().unwrap();
+        let key = encryption.generate_key().await.unwrap();
+        let data = b"sensitive data";
+        let aad = b"additional authenticated data";
+        let wrong_aad = b"wrong additional data";
+
+        // Encrypt with AAD
+        let encrypted = encryption
+            .encrypt_with_aad(data, &key, Some(aad))
+            .await
+            .unwrap();
+
+        // Try to decrypt with different AAD - should fail
+        let mut encrypted_with_wrong_aad = encrypted.clone();
+        encrypted_with_wrong_aad.metadata.aad = Some(wrong_aad.to_vec());
+
+        let result = encryption
+            .decrypt_with_aad(&encrypted_with_wrong_aad, &key)
+            .await;
+        assert!(result.is_err(), "Decryption with wrong AAD should fail");
+
+        let error = result.unwrap_err();
+        assert!(
+            matches!(error, FiscusError::Authentication(_)),
+            "Should return Authentication error for AAD mismatch"
+        );
+
+        // Try to decrypt with no AAD when AAD was used - should fail
+        let mut encrypted_no_aad = encrypted.clone();
+        encrypted_no_aad.metadata.aad = None;
+
+        let result = encryption.decrypt_with_aad(&encrypted_no_aad, &key).await;
+        assert!(
+            result.is_err(),
+            "Decryption without AAD when AAD was used should fail"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_aes_gcm_corrupted_auth_tag() {
+        let encryption = AesGcmEncryption::new().unwrap();
+        let key = encryption.generate_key().await.unwrap();
+        let data = b"sensitive financial data";
+
+        // Encrypt data
+        let mut encrypted = encryption.encrypt(data, &key).await.unwrap();
+
+        // For AES-GCM, the auth tag is included in the ciphertext (last 16 bytes)
+        // Corrupt the authentication tag by modifying the end of the ciphertext
+        if encrypted.ciphertext.len() >= 16 {
+            let len = encrypted.ciphertext.len();
+            encrypted.ciphertext[len - 1] ^= 0xFF; // Flip all bits in last byte (auth tag)
+        }
+
+        // Try to decrypt with corrupted tag - should fail
+        let result = encryption.decrypt(&encrypted, &key).await;
+        assert!(
+            result.is_err(),
+            "Decryption with corrupted auth tag should fail"
+        );
+
+        let error = result.unwrap_err();
+        assert!(
+            matches!(error, FiscusError::Authentication(_)),
+            "Should return Authentication error for corrupted auth tag"
+        );
+    }
+
+    // ===== CHACHA20-POLY1305 NEGATIVE TEST CASES =====
+
+    #[tokio::test]
+    async fn test_chacha20_decrypt_with_wrong_key() {
+        let encryption = ChaCha20Poly1305Encryption::new().unwrap();
+        let correct_key = encryption.generate_key().await.unwrap();
+        let wrong_key = encryption.generate_key().await.unwrap();
+        let data = b"sensitive financial data";
+
+        // Encrypt with correct key
+        let encrypted = encryption.encrypt(data, &correct_key).await.unwrap();
+
+        // Try to decrypt with wrong key - should fail
+        let result = encryption.decrypt(&encrypted, &wrong_key).await;
+        assert!(result.is_err(), "Decryption with wrong key should fail");
+
+        let error = result.unwrap_err();
+        assert!(
+            matches!(error, FiscusError::Authentication(_)),
+            "Should return Authentication error for decryption failure"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_chacha20_decrypt_corrupted_ciphertext() {
+        let encryption = ChaCha20Poly1305Encryption::new().unwrap();
+        let key = encryption.generate_key().await.unwrap();
+        let data = b"sensitive financial data";
+
+        // Encrypt data
+        let mut encrypted = encryption.encrypt(data, &key).await.unwrap();
+
+        // Corrupt the ciphertext
+        if !encrypted.ciphertext.is_empty() {
+            encrypted.ciphertext[0] ^= 0xFF; // Flip all bits in first byte
+        }
+
+        // Try to decrypt corrupted data - should fail
+        let result = encryption.decrypt(&encrypted, &key).await;
+        assert!(
+            result.is_err(),
+            "Decryption of corrupted ciphertext should fail"
+        );
+
+        let error = result.unwrap_err();
+        assert!(
+            matches!(error, FiscusError::Authentication(_)),
+            "Should return Authentication error for corrupted ciphertext"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_chacha20_decrypt_modified_nonce() {
+        let encryption = ChaCha20Poly1305Encryption::new().unwrap();
+        let key = encryption.generate_key().await.unwrap();
+        let data = b"sensitive financial data";
+
+        // Encrypt data
+        let mut encrypted = encryption.encrypt(data, &key).await.unwrap();
+
+        // Modify the nonce
+        if !encrypted.nonce.is_empty() {
+            encrypted.nonce[0] ^= 0xFF; // Flip all bits in first byte
+        }
+
+        // Try to decrypt with modified nonce - should fail
+        let result = encryption.decrypt(&encrypted, &key).await;
+        assert!(
+            result.is_err(),
+            "Decryption with modified nonce should fail"
+        );
+
+        let error = result.unwrap_err();
+        assert!(
+            matches!(error, FiscusError::Authentication(_)),
+            "Should return Authentication error for modified nonce"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_chacha20_algorithm_mismatch() {
+        let encryption = ChaCha20Poly1305Encryption::new().unwrap();
+        let key = encryption.generate_key().await.unwrap();
+        let data = b"sensitive financial data";
+
+        // Encrypt data normally
+        let mut encrypted = encryption.encrypt(data, &key).await.unwrap();
+
+        // Change algorithm in metadata to create mismatch
+        encrypted.metadata.algorithm = EncryptionAlgorithm::Aes256Gcm;
+
+        // Try to decrypt - should fail due to algorithm mismatch
+        let result = encryption.decrypt(&encrypted, &key).await;
+        assert!(
+            result.is_err(),
+            "Decryption with algorithm mismatch should fail"
+        );
+
+        let error = result.unwrap_err();
+        assert!(
+            matches!(error, FiscusError::InvalidInput(_)),
+            "Should return InvalidInput error for algorithm mismatch"
+        );
+        assert!(
+            error.to_string().contains("Algorithm mismatch"),
+            "Error message should mention algorithm mismatch"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_chacha20_key_algorithm_mismatch() {
+        let encryption = ChaCha20Poly1305Encryption::new().unwrap();
+        let aes_encryption = AesGcmEncryption::new().unwrap();
+        let aes_key = aes_encryption.generate_key().await.unwrap(); // AES key
+        let data = b"sensitive financial data";
+
+        // Try to encrypt with AES key using ChaCha20 - should fail
+        let result = encryption.encrypt(data, &aes_key).await;
+        assert!(
+            result.is_err(),
+            "Encryption with wrong key algorithm should fail"
+        );
+
+        let error = result.unwrap_err();
+        assert!(
+            matches!(error, FiscusError::InvalidInput(_)),
+            "Should return InvalidInput error for key algorithm mismatch"
+        );
+        assert!(
+            error.to_string().contains("Key algorithm mismatch"),
+            "Error message should mention key algorithm mismatch"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_chacha20_invalid_key_length() {
+        let encryption = ChaCha20Poly1305Encryption::new().unwrap();
+        let data = b"sensitive financial data";
+
+        // Create a key with invalid length (16 bytes instead of 32)
+        let invalid_key = EncryptionKey::new(
+            vec![0u8; 16], // Invalid length for ChaCha20
+            KeyType::Symmetric,
+            EncryptionAlgorithm::ChaCha20Poly1305,
+            "test-key".to_string(),
+        );
+
+        // Try to encrypt with invalid key length - should fail
+        let result = encryption.encrypt(data, &invalid_key).await;
+        assert!(
+            result.is_err(),
+            "Encryption with invalid key length should fail"
+        );
+
+        let error = result.unwrap_err();
+        assert!(
+            matches!(error, FiscusError::InvalidInput(_)),
+            "Should return InvalidInput error for invalid key length"
+        );
+        assert!(
+            error.to_string().contains("Invalid key length"),
+            "Error message should mention invalid key length"
+        );
+    }
+
+    // ===== ADDITIONAL EDGE CASE TESTS =====
+
+    #[tokio::test]
+    async fn test_aes_gcm_empty_ciphertext() {
+        let encryption = AesGcmEncryption::new().unwrap();
+        let key = encryption.generate_key().await.unwrap();
+
+        // Create encrypted data with empty ciphertext
+        let metadata = EncryptionMetadata::new(EncryptionAlgorithm::Aes256Gcm, key.key_id.clone());
+        let empty_encrypted = EncryptedData::new(
+            Vec::new(),          // Empty ciphertext
+            vec![0u8; 12],       // Valid nonce size
+            Some(vec![0u8; 16]), // Valid tag size
+            metadata,
+        );
+
+        // Try to decrypt empty ciphertext - should fail
+        let result = encryption.decrypt(&empty_encrypted, &key).await;
+        assert!(
+            result.is_err(),
+            "Decryption of empty ciphertext should fail"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_chacha20_empty_ciphertext() {
+        let encryption = ChaCha20Poly1305Encryption::new().unwrap();
+        let key = encryption.generate_key().await.unwrap();
+
+        // Create encrypted data with empty ciphertext
+        let metadata =
+            EncryptionMetadata::new(EncryptionAlgorithm::ChaCha20Poly1305, key.key_id.clone());
+        let empty_encrypted = EncryptedData::new(
+            Vec::new(),    // Empty ciphertext
+            vec![0u8; 12], // Valid nonce size
+            None,          // ChaCha20-Poly1305 includes auth tag in ciphertext
+            metadata,
+        );
+
+        // Try to decrypt empty ciphertext - should fail
+        let result = encryption.decrypt(&empty_encrypted, &key).await;
+        assert!(
+            result.is_err(),
+            "Decryption of empty ciphertext should fail"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_aes_gcm_invalid_nonce_size() {
+        let encryption = AesGcmEncryption::new().unwrap();
+        let key = encryption.generate_key().await.unwrap();
+
+        // Create encrypted data with invalid nonce size
+        let metadata = EncryptionMetadata::new(EncryptionAlgorithm::Aes256Gcm, key.key_id.clone());
+        let invalid_nonce_encrypted = EncryptedData::new(
+            vec![1, 2, 3, 4],    // Some ciphertext
+            vec![0u8; 8],        // Invalid nonce size (should be 12 for AES-GCM)
+            Some(vec![0u8; 16]), // Valid tag size
+            metadata,
+        );
+
+        // Try to decrypt with invalid nonce size - should fail
+        let result = encryption.decrypt(&invalid_nonce_encrypted, &key).await;
+        assert!(
+            result.is_err(),
+            "Decryption with invalid nonce size should fail"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_chacha20_invalid_nonce_size() {
+        let encryption = ChaCha20Poly1305Encryption::new().unwrap();
+        let key = encryption.generate_key().await.unwrap();
+
+        // Create encrypted data with invalid nonce size
+        let metadata =
+            EncryptionMetadata::new(EncryptionAlgorithm::ChaCha20Poly1305, key.key_id.clone());
+        let invalid_nonce_encrypted = EncryptedData::new(
+            vec![1, 2, 3, 4], // Some ciphertext
+            vec![0u8; 8],     // Invalid nonce size (should be 12 for ChaCha20-Poly1305)
+            None,             // ChaCha20-Poly1305 includes auth tag in ciphertext
+            metadata,
+        );
+
+        // Try to decrypt with invalid nonce size - should fail
+        let result = encryption.decrypt(&invalid_nonce_encrypted, &key).await;
+        assert!(
+            result.is_err(),
+            "Decryption with invalid nonce size should fail"
+        );
+
+        let error = result.unwrap_err();
+        assert!(
+            matches!(error, FiscusError::InvalidInput(_)),
+            "Should return InvalidInput error for invalid nonce size"
+        );
+        assert!(
+            error.to_string().contains("Invalid nonce length"),
+            "Error message should mention invalid nonce length"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_cross_algorithm_decryption_attempt() {
+        // Test attempting to decrypt AES-GCM data with ChaCha20 and vice versa
+        let aes_encryption = AesGcmEncryption::new().unwrap();
+        let chacha_encryption = ChaCha20Poly1305Encryption::new().unwrap();
+
+        let aes_key = aes_encryption.generate_key().await.unwrap();
+        let chacha_key = chacha_encryption.generate_key().await.unwrap();
+        let data = b"cross algorithm test data";
+
+        // Encrypt with AES-GCM
+        let aes_encrypted = aes_encryption.encrypt(data, &aes_key).await.unwrap();
+
+        // Try to decrypt AES data with ChaCha20 - should fail
+        let result = chacha_encryption.decrypt(&aes_encrypted, &chacha_key).await;
+        assert!(result.is_err(), "Cross-algorithm decryption should fail");
+
+        // Encrypt with ChaCha20-Poly1305
+        let chacha_encrypted = chacha_encryption.encrypt(data, &chacha_key).await.unwrap();
+
+        // Try to decrypt ChaCha20 data with AES-GCM - should fail
+        let result = aes_encryption.decrypt(&chacha_encrypted, &aes_key).await;
+        assert!(result.is_err(), "Cross-algorithm decryption should fail");
     }
 }

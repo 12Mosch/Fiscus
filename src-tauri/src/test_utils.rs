@@ -9,6 +9,7 @@ use crate::{
     dto::*,
     error::{FiscusResult, ValidatedCurrency, ValidatedUserId},
     models::*,
+    security::data_protection::SensitiveData,
 };
 
 /// Test utilities for creating mock data and setting up test environments
@@ -165,7 +166,7 @@ impl TestUtils {
         CreateUserRequest {
             username: username.to_string(),
             email: email.map(|e| e.to_string()),
-            password: password.to_string(),
+            password: SensitiveData::new(password.to_string()),
         }
     }
 
@@ -173,7 +174,7 @@ impl TestUtils {
     pub fn login_request(username: &str, password: &str) -> LoginRequest {
         LoginRequest {
             username: username.to_string(),
-            password: password.to_string(),
+            password: SensitiveData::new(password.to_string()),
         }
     }
 

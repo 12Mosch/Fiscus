@@ -18,14 +18,14 @@ mod tests;
 
 // Re-export main types for easier access
 pub use config::{
-    get_config, init_logging, init_logging_with_config, Environment, LogFormat, LoggingConfig,
+    init_logging, Environment, LogFormat, LoggingConfig,
 };
 pub use middleware::{
-    with_logging, with_simple_logging, DatabaseLogger, ExtractUserId, LoggingMiddleware,
+    DatabaseLogger, ExtractUserId, LoggingMiddleware,
     RequestContext,
 };
 pub use performance::{
-    get_performance_monitor, init_performance_monitoring, PerformanceMonitor, PerformanceSummary,
+    init_performance_monitoring, PerformanceMonitor, PerformanceSummary,
 };
 pub use sanitizer::{DataSanitizer, Sanitizable};
 

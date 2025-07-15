@@ -17,6 +17,9 @@ use crate::{
     error::{FiscusError, FiscusResult, SecurityValidator, Validator},
 };
 
+#[cfg(test)]
+use crate::security::data_protection::SensitiveData;
+
 /// Global encryption service instance
 static ENCRYPTION_SERVICE: OnceLock<Arc<EncryptionService>> = OnceLock::new();
 
@@ -275,8 +278,13 @@ pub async fn get_encryption_stats() -> FiscusResult<EncryptionStatsResponse> {
 pub async fn derive_key_from_password(
     request: DeriveKeyRequest,
 ) -> FiscusResult<DeriveKeyResponse> {
+    use crate::encryption::key_derivation::{Argon2Kdf, KeyDerivation, Pbkdf2Kdf, ScryptKdf};
+    use crate::encryption::types::{KeyDerivationAlgorithm, KeyDerivationParams};
+    use crate::encryption::utils::SecureRandom;
+    use chrono::Utc;
+
     // Validate input
-    Validator::validate_string(&request.password, "password", 8, 128)?;
+    Validator::validate_string(request.password.expose(), "password", 8, 128)?;
 
     let _service = get_encryption_service()?;
 
@@ -286,15 +294,75 @@ pub async fn derive_key_from_password(
         "Deriving key from password"
     );
 
-    // TODO: This is a simplified implementation - in production, you'd want more sophisticated key derivation
-    Err(FiscusError::Internal(
-        "Key derivation from password not implemented".to_string(),
-    ))
+    // Handle salt - either decode from base64 or generate new one
+    let salt = if let Some(salt_b64) = &request.salt {
+        use base64::{engine::general_purpose, Engine as _};
+        general_purpose::STANDARD.decode(salt_b64).map_err(|e| {
+            error!("Invalid base64 salt: {}", e);
+            FiscusError::InvalidInput("Invalid base64 salt".to_string())
+        })?
+    } else {
+        // Generate a new random salt
+        let mut rng = SecureRandom::new()?;
+        rng.generate_salt()?
+    };
+
+    // Create key derivation parameters based on algorithm
+    let params = match request.algorithm {
+        KeyDerivationAlgorithm::Argon2id => KeyDerivationParams::argon2id_default(salt),
+        KeyDerivationAlgorithm::Pbkdf2Sha256 => KeyDerivationParams::pbkdf2_default(salt),
+        KeyDerivationAlgorithm::Scrypt => KeyDerivationParams::scrypt_default(salt),
+        KeyDerivationAlgorithm::HkdfSha256 => {
+            return Err(FiscusError::InvalidInput(
+                "HKDF-SHA256 not yet implemented for password derivation".to_string(),
+            ));
+        }
+    };
+
+    // Create the appropriate key derivation instance and derive the key
+    let derived_key = match request.algorithm {
+        KeyDerivationAlgorithm::Argon2id => {
+            let kdf = Argon2Kdf::new()?;
+            kdf.derive_key(request.password.expose().as_bytes(), &params)
+                .await?
+        }
+        KeyDerivationAlgorithm::Pbkdf2Sha256 => {
+            let kdf = Pbkdf2Kdf::new()?;
+            kdf.derive_key(request.password.expose().as_bytes(), &params)
+                .await?
+        }
+        KeyDerivationAlgorithm::Scrypt => {
+            let kdf = ScryptKdf::new()?;
+            kdf.derive_key(request.password.expose().as_bytes(), &params)
+                .await?
+        }
+        KeyDerivationAlgorithm::HkdfSha256 => {
+            // This case is already handled above, but included for completeness
+            return Err(FiscusError::InvalidInput(
+                "HKDF-SHA256 not yet implemented for password derivation".to_string(),
+            ));
+        }
+    };
+
+    let response = DeriveKeyResponse {
+        key_id: derived_key.key_id.clone(),
+        algorithm: request.algorithm,
+        derived_at: Utc::now(),
+    };
+
+    debug!(
+        key_id = %derived_key.key_id,
+        algorithm = ?request.algorithm,
+        "Key derived from password successfully"
+    );
+
+    Ok(response)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::encryption::types::KeyDerivationAlgorithm;
 
     #[tokio::test]
     async fn test_encryption_service_initialization() {
@@ -303,5 +371,117 @@ mod tests {
 
         let service = get_encryption_service();
         assert!(service.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_derive_key_from_password() {
+        // Initialize encryption service
+        let _ = initialize_encryption_service();
+
+        // Test with Argon2id (default algorithm)
+        let request = DeriveKeyRequest {
+            password: SensitiveData::new("test_password_123".to_string()),
+            algorithm: KeyDerivationAlgorithm::Argon2id,
+            salt: None, // Let it generate a random salt
+        };
+
+        let result = derive_key_from_password(request).await;
+        assert!(result.is_ok());
+
+        let response = result.unwrap();
+        assert!(!response.key_id.is_empty());
+        assert_eq!(response.algorithm, KeyDerivationAlgorithm::Argon2id);
+        assert!(response.derived_at <= chrono::Utc::now());
+    }
+
+    #[tokio::test]
+    async fn test_derive_key_from_password_with_salt() {
+        // Initialize encryption service
+        let _ = initialize_encryption_service();
+
+        // Test with custom base64-encoded salt
+        use base64::{engine::general_purpose, Engine as _};
+        let salt = vec![0x42u8; 16];
+        let salt_b64 = general_purpose::STANDARD.encode(&salt);
+
+        let request = DeriveKeyRequest {
+            password: SensitiveData::new("test_password_456".to_string()),
+            algorithm: KeyDerivationAlgorithm::Pbkdf2Sha256,
+            salt: Some(salt_b64),
+        };
+
+        let result = derive_key_from_password(request).await;
+        assert!(result.is_ok());
+
+        let response = result.unwrap();
+        assert!(!response.key_id.is_empty());
+        assert_eq!(response.algorithm, KeyDerivationAlgorithm::Pbkdf2Sha256);
+    }
+
+    #[tokio::test]
+    async fn test_derive_key_from_password_scrypt() {
+        // Initialize encryption service
+        let _ = initialize_encryption_service();
+
+        let request = DeriveKeyRequest {
+            password: SensitiveData::new("test_password_scrypt".to_string()),
+            algorithm: KeyDerivationAlgorithm::Scrypt,
+            salt: None,
+        };
+
+        let result = derive_key_from_password(request).await;
+        assert!(result.is_ok());
+
+        let response = result.unwrap();
+        assert!(!response.key_id.is_empty());
+        assert_eq!(response.algorithm, KeyDerivationAlgorithm::Scrypt);
+    }
+
+    #[tokio::test]
+    async fn test_derive_key_from_password_invalid_salt() {
+        // Initialize encryption service
+        let _ = initialize_encryption_service();
+
+        let request = DeriveKeyRequest {
+            password: SensitiveData::new("test_password_123".to_string()),
+            algorithm: KeyDerivationAlgorithm::Argon2id,
+            salt: Some("invalid_base64!@#".to_string()),
+        };
+
+        let result = derive_key_from_password(request).await;
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), FiscusError::InvalidInput(_)));
+    }
+
+    #[tokio::test]
+    async fn test_derive_key_from_password_short_password() {
+        // Initialize encryption service
+        let _ = initialize_encryption_service();
+
+        let request = DeriveKeyRequest {
+            password: SensitiveData::new("short".to_string()), // Less than 8 characters
+            algorithm: KeyDerivationAlgorithm::Argon2id,
+            salt: None,
+        };
+
+        let result = derive_key_from_password(request).await;
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), FiscusError::Validation(_)));
+    }
+
+    #[tokio::test]
+    async fn test_derive_key_from_password_hkdf_not_implemented() {
+        // Initialize encryption service
+        let _ = initialize_encryption_service();
+
+        let request = DeriveKeyRequest {
+            password: SensitiveData::new("test_password_123".to_string()),
+            algorithm: KeyDerivationAlgorithm::HkdfSha256,
+            salt: None,
+        };
+
+        let result = derive_key_from_password(request).await;
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), FiscusError::InvalidInput(_)));
     }
 }

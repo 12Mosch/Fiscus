@@ -66,16 +66,28 @@ impl EncryptedDatabaseUtils {
 
             Ok(json_results)
         } else {
-            // For INSERT/UPDATE queries, encrypt sensitive fields first
-            let encrypted_params = Self::encrypt_query_params(params, user_id, table_name).await?;
-            DatabaseUtils::execute_query(db, query, encrypted_params).await
+            // For INSERT/UPDATE queries, we cannot safely encrypt parameters without field mapping
+            // This prevents potential security vulnerabilities from unencrypted sensitive data
+            error!(
+                query = query,
+                table = table_name,
+                user_id = user_id,
+                param_count = params.len(),
+                "SECURITY ERROR: execute_encrypted_query cannot safely encrypt INSERT/UPDATE parameters without field mapping"
+            );
+
+            return Err(FiscusError::Security(
+                "INSERT/UPDATE queries with automatic parameter encryption are not supported. \
+                Use encrypt_record() for structured data operations or encrypt_params_with_mapping() \
+                for explicit field mapping to ensure sensitive data is properly encrypted.".to_string()
+            ));
         }
     }
 
     /// Execute a non-query with automatic encryption
-    #[instrument(skip(db, params), fields(query_type = "encrypted_non_query"))]
+    #[instrument(skip(_db, params), fields(query_type = "encrypted_non_query"))]
     pub async fn execute_encrypted_non_query(
-        db: &Database,
+        _db: &Database,
         query: &str,
         params: Vec<Value>,
         user_id: &str,
@@ -88,63 +100,32 @@ impl EncryptedDatabaseUtils {
             "Executing encrypted non-query"
         );
 
-        let encrypted_params = Self::encrypt_query_params(params, user_id, table_name).await?;
-        DatabaseUtils::execute_non_query(db, query, encrypted_params).await
-    }
-
-    /// Encrypt sensitive parameters before database insertion
-    ///
-    /// SECURITY CRITICAL: This function encrypts parameters that will be inserted into
-    /// sensitive database fields. It must not be bypassed in production.
-    async fn encrypt_query_params(
-        params: Vec<Value>,
-        user_id: &str,
-        table_name: &str,
-    ) -> FiscusResult<Vec<Value>> {
-        // PRODUCTION GUARD: Fail fast if this is called in production without proper implementation
-        #[cfg(not(debug_assertions))]
-        {
-            error!(
-                table = table_name,
-                user_id = user_id,
-                param_count = params.len(),
-                "CRITICAL SECURITY ERROR: encrypt_query_params called in production without proper parameter mapping"
-            );
-            return Err(FiscusError::Security(
-                "Parameter encryption not implemented for production use. This would expose sensitive data.".to_string()
-            ));
-        }
-
-        let encrypted_fields = Self::get_encrypted_fields(table_name);
-
-        // If no fields need encryption for this table, return params as-is
-        if encrypted_fields.is_empty() {
-            debug!(
-                table = table_name,
-                "No encrypted fields configured for table, returning parameters unchanged"
-            );
-            return Ok(params);
-        }
-
-        // FAIL-FAST: If we have encrypted fields but no proper mapping strategy,
-        // we must not allow potentially sensitive data to pass through unencrypted
+        // We cannot safely encrypt parameters without field mapping
+        // This prevents potential security vulnerabilities from unencrypted sensitive data
         error!(
+            query = query,
             table = table_name,
             user_id = user_id,
-            encrypted_fields = ?encrypted_fields,
             param_count = params.len(),
-            "SECURITY VIOLATION: Cannot safely encrypt parameters without field mapping. Sensitive data may be exposed."
+            "SECURITY ERROR: execute_encrypted_non_query cannot safely encrypt parameters without field mapping"
         );
 
-        // In development, log the issue but continue with a warning
-        #[cfg(debug_assertions)]
-        {
-            warn!(
-                "DEVELOPMENT MODE: Parameter encryption not fully implemented. Use encrypt_record() for structured data operations."
-            );
-            Ok(params)
-        }
+        return Err(FiscusError::Security(
+            "Non-query operations with automatic parameter encryption are not supported. \
+            Use encrypt_record() for structured data operations or encrypt_params_with_mapping() \
+            for explicit field mapping to ensure sensitive data is properly encrypted."
+                .to_string(),
+        ));
     }
+
+    // REMOVED: encrypt_query_params function was removed due to security concerns.
+    // It could not safely encrypt parameters without explicit field mapping, potentially
+    // allowing sensitive data to pass through unencrypted.
+    //
+    // Use these safer alternatives instead:
+    // - encrypt_record() for structured data operations with HashMap<String, Value>
+    // - encrypt_params_with_mapping() for explicit field-to-value mapping
+    // - Direct field encryption with encrypt_field_value() for individual fields
 
     /// Encrypt parameters with explicit field mapping (RECOMMENDED APPROACH)
     ///
@@ -527,31 +508,10 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn test_encrypt_query_params_security_guard() {
-        // deepcode ignore NoHardcodedCredentials: <test>
-        let params = vec![Value::String("sensitive_data".to_string())];
-        // deepcode ignore NoHardcodedCredentials: <test>
-        let user_id = "test-user";
-        let table_name = "transactions"; // Has encrypted fields
-
-        // In debug mode, this should return params with a warning
-        #[cfg(debug_assertions)]
-        {
-            let result =
-                EncryptedDatabaseUtils::encrypt_query_params(params, user_id, table_name).await;
-            assert!(result.is_ok());
-        }
-
-        // Test with table that has no encrypted fields
-        let result = EncryptedDatabaseUtils::encrypt_query_params(
-            vec![Value::String("data".to_string())],
-            user_id,
-            "non_encrypted_table",
-        )
-        .await;
-        assert!(result.is_ok());
-    }
+    // REMOVED: test_encrypt_query_params_security_guard test was removed
+    // because the encrypt_query_params function was removed for security reasons.
+    // Tests for the safer alternatives (encrypt_record, encrypt_params_with_mapping)
+    // are available below.
 
     #[test]
     fn test_encrypted_fields_configuration() {
@@ -582,7 +542,7 @@ mod tests {
             "description".to_string(),
             Value::String("Test transaction".to_string()),
         );
-        
+
         // deepcode ignore NoHardcodedCredentials: <test>
         let user_id = "test-user";
         let table_name = "transactions";

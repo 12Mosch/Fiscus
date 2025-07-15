@@ -19,10 +19,19 @@ mod test_utils;
 mod test_database;
 
 // Re-export for easier access
-pub use database::*;
+pub use database::{
+    config as database_config, connection, encrypted, secure_storage_repository, sqlite, Database,
+    DatabaseConfig, DatabaseConnection, DatabaseType, DatabaseUtils, PoolStats, SQLiteManager,
+    SQLiteStats,
+};
 pub use dto::*;
 pub use error::*;
-pub use logging::*;
+pub use logging::{
+    config as logging_config, create_db_logger, create_middleware, create_sanitizer, init,
+    middleware, performance, sanitizer, DataSanitizer, DatabaseLogger, Environment, ExtractUserId,
+    LogFormat, LoggingConfig, LoggingMiddleware, PerformanceMonitor, PerformanceSummary,
+    RequestContext, Sanitizable,
+};
 pub use models::*;
 pub use utils::*;
 

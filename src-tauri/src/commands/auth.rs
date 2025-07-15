@@ -13,6 +13,9 @@ use crate::{
     error::{FiscusError, FiscusResult, Validator},
 };
 
+#[cfg(test)]
+use crate::security::data_protection::SensitiveData;
+
 /// Create a new user account
 #[tauri::command]
 pub async fn create_user(
@@ -21,7 +24,7 @@ pub async fn create_user(
 ) -> Result<UserResponse, FiscusError> {
     // Validate input
     Validator::validate_string(&request.username, "username", 3, 50)?;
-    Validator::validate_string(&request.password, "password", 8, 128)?;
+    Validator::validate_string(request.password.expose(), "password", 8, 128)?;
 
     if let Some(ref email) = request.email {
         Validator::validate_email(email)?;
@@ -69,7 +72,7 @@ pub async fn create_user(
     }
 
     // Hash password
-    let password_hash = hash_password(&request.password)?;
+    let password_hash = hash_password(request.password.expose())?;
 
     // Create user
     let user_id = Uuid::new_v4().to_string();
@@ -124,7 +127,7 @@ pub async fn login_user(
 ) -> Result<LoginResponse, FiscusError> {
     // Validate input
     Validator::validate_string(&request.username, "username", 1, 50)?;
-    Validator::validate_string(&request.password, "password", 1, 128)?;
+    Validator::validate_string(request.password.expose(), "password", 1, 128)?;
 
     // Find user by username - first get user_id for encryption context
     let user_id_query = "SELECT id FROM users WHERE username = ?1";
@@ -167,7 +170,7 @@ pub async fn login_user(
         .ok_or_else(|| FiscusError::Database("Invalid user data".to_string()))?;
 
     // Verify password
-    if !verify_password(&request.password, stored_hash)? {
+    if !verify_password(request.password.expose(), stored_hash)? {
         return Err(FiscusError::Authentication(
             "Invalid credentials".to_string(),
         ));
@@ -217,8 +220,13 @@ pub async fn change_password(
 ) -> Result<bool, FiscusError> {
     // Validate input
     Validator::validate_uuid(&request.user_id.as_str(), "user_id")?;
-    Validator::validate_string(&request.current_password, "current_password", 1, 128)?;
-    Validator::validate_string(&request.new_password, "new_password", 8, 128)?;
+    Validator::validate_string(
+        request.current_password.expose(),
+        "current_password",
+        1,
+        128,
+    )?;
+    Validator::validate_string(request.new_password.expose(), "new_password", 8, 128)?;
 
     // Get current user data
     let user_query = "SELECT password_hash FROM users WHERE id = ?1";
@@ -238,14 +246,14 @@ pub async fn change_password(
         .and_then(|v| v.as_str())
         .ok_or_else(|| FiscusError::Database("Invalid user data".to_string()))?;
 
-    if !verify_password(&request.current_password, stored_hash)? {
+    if !verify_password(request.current_password.expose(), stored_hash)? {
         return Err(FiscusError::Authentication(
             "Current password is incorrect".to_string(),
         ));
     }
 
     // Hash new password
-    let new_password_hash = hash_password(&request.new_password)?;
+    let new_password_hash = hash_password(request.new_password.expose())?;
 
     // Update password
     let update_query = "UPDATE users SET password_hash = ?1, updated_at = ?2 WHERE id = ?3";
@@ -456,13 +464,13 @@ mod tests {
         let request = CreateUserRequest {
             username: "testuser".to_string(),
             email: Some("test@example.com".to_string()),
-            password: "password123".to_string(),
+            password: SensitiveData::new("password123".to_string()),
         };
 
         // Test that the request structure is correct
         assert_eq!(request.username, "testuser");
         assert_eq!(request.email, Some("test@example.com".to_string()));
-        assert_eq!(request.password, "password123");
+        assert_eq!(request.password.expose(), "password123");
 
         // Test cloning works
         let cloned = request.clone();
@@ -518,14 +526,14 @@ mod tests {
         use crate::error::ValidatedUserId;
         let request = ChangePasswordRequest {
             user_id: ValidatedUserId::new(&uuid::Uuid::new_v4().to_string()).unwrap(),
-            current_password: "current123".to_string(),
-            new_password: "newpassword123".to_string(),
+            current_password: SensitiveData::new("current123".to_string()),
+            new_password: SensitiveData::new("newpassword123".to_string()),
         };
 
         // Test that the request structure is correct
         assert!(!request.user_id.is_empty());
-        assert_eq!(request.current_password, "current123");
-        assert_eq!(request.new_password, "newpassword123");
+        assert_eq!(request.current_password.expose(), "current123");
+        assert_eq!(request.new_password.expose(), "newpassword123");
     }
 
     #[test]
@@ -607,7 +615,7 @@ mod tests {
 
         assert_eq!(request.username, "testuser");
         assert_eq!(request.email, Some("test@example.com".to_string()));
-        assert_eq!(request.password, "password123");
+        assert_eq!(request.password.expose(), "password123");
     }
 
     #[test]
@@ -615,7 +623,7 @@ mod tests {
         let request = TestUtils::login_request("testuser", "password123");
 
         assert_eq!(request.username, "testuser");
-        assert_eq!(request.password, "password123");
+        assert_eq!(request.password.expose(), "password123");
     }
 
     #[test]
@@ -625,7 +633,7 @@ mod tests {
         let request = CreateUserRequest {
             username: long_username.clone(),
             email: None,
-            password: "password123".to_string(),
+            password: SensitiveData::new("password123".to_string()),
         };
 
         // Should not panic on validation

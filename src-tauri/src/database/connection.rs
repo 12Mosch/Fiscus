@@ -75,10 +75,12 @@ pub struct ConnectionManager {
     /// Connection pool
     pool: Arc<RwLock<Vec<DatabaseConnection>>>,
     /// Connection usage tracking
+    #[allow(dead_code)]
     usage_stats: Arc<RwLock<HashMap<String, u64>>>,
     /// Pool statistics
     stats: Arc<RwLock<PoolStats>>,
     /// Database logger
+    #[allow(dead_code)]
     logger: DatabaseLogger,
 }
 

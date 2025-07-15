@@ -226,26 +226,26 @@ pub async fn update_category(
             ));
         }
 
-        update_fields.push(format!("`name` = ?{param_index}"));
+        update_fields.push(format!("name = ?{param_index}"));
         params.push(Value::String(name.clone()));
         param_index += 1;
     }
 
     if let Some(description) = &request.description {
         Validator::validate_string(description, "description", 0, 500)?;
-        update_fields.push(format!("`description` = ?{param_index}"));
+        update_fields.push(format!("description = ?{param_index}"));
         params.push(Value::String(description.clone()));
         param_index += 1;
     }
 
     if let Some(color) = &request.color {
-        update_fields.push(format!("`color` = ?{param_index}"));
+        update_fields.push(format!("color = ?{param_index}"));
         params.push(Value::String(color.clone()));
         param_index += 1;
     }
 
     if let Some(icon) = &request.icon {
-        update_fields.push(format!("`icon` = ?{param_index}"));
+        update_fields.push(format!("icon = ?{param_index}"));
         params.push(Value::String(icon.clone()));
         param_index += 1;
     }
@@ -270,7 +270,7 @@ pub async fn update_category(
             }
         }
 
-        update_fields.push(format!("`parent_category_id` = ?{param_index}"));
+        update_fields.push(format!("parent_category_id = ?{param_index}"));
         if parent_id.is_empty() {
             params.push(Value::Null);
         } else {
@@ -280,7 +280,7 @@ pub async fn update_category(
     }
 
     if let Some(is_active) = request.is_active {
-        update_fields.push(format!("`is_active` = ?{param_index}"));
+        update_fields.push(format!("is_active = ?{param_index}"));
         params.push(Value::Bool(is_active));
         param_index += 1;
     }

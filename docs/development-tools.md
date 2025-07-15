@@ -61,21 +61,11 @@ npm test -- src/components/debug/__tests__/DatabaseTest.test.tsx
 ```
 
 Test coverage includes:
+
 - Development mode rendering
 - Production mode stub behavior
 - Warning message logging
 - Environment variable handling
-
-### DatabaseSeeder Component
-
-The `DatabaseSeeder` component provides a UI for database seeding operations. Like the `DatabaseTest` component, it's designed for development use only.
-
-#### Features
-
-- **Preset Configurations**: Multiple seeding presets (minimal, demo, full)
-- **Selective Seeding**: Choose which data types to seed
-- **Clear Operations**: Database clearing functionality
-- **Progress Tracking**: Real-time seeding progress display
 
 ## Development Routes
 
@@ -84,7 +74,6 @@ The `DatabaseSeeder` component provides a UI for database seeding operations. Li
 The development route (`src/routes/dev.tsx`) provides access to all development tools:
 
 - Database testing utilities
-- Database seeding interface
 - Development environment information
 - Debug component showcase
 
@@ -121,11 +110,17 @@ export const DebugComponent = process.env.NODE_ENV !== 'production'
 ## Available Scripts
 
 ```bash
+# Run all linters and tests
+npm run check-all
+
 # Run all tests including debug component tests
 npm run test
 
-# Run linter (includes debug components)
-npm run lint
+# Run Javascript linter
+npm run lint-js
+
+# Run Rust linter
+npm run lint-rs
 
 # Start development server with debug tools
 npm run dev

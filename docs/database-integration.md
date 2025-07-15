@@ -7,23 +7,25 @@ Fiscus uses the Tauri SQL plugin with SQLite for local data storage. This docume
 ## Architecture
 
 ### Technology Stack
+
 - **Database**: SQLite (via Tauri SQL plugin)
 - **ORM/Query Builder**: Custom TypeScript repositories
 - **Migrations**: SQL-based migrations with version control
 - **Connection Management**: Singleton pattern with error handling
 
 ### Key Components
-- **Connection Layer**: `src/lib/database/connection.ts`
-- **Type Definitions**: `src/lib/database/types.ts`
-- **Repository Pattern**: `src/lib/database/repositories/`
-- **React Hooks**: `src/lib/database/hooks.ts`
-- **Service Layer**: `src/lib/database/index.ts`
+
+- **Secure API Service**: `src/lib/api-service/index.ts`
+- **React Hooks**: `src/lib/database/hooks.ts` (migrated to use API service)
+- **Tauri Commands**: `src-tauri/src/commands/` (secure backend)
+- **Type Definitions**: `src/types/api.ts`
 
 ## Database Schema
 
 ### Core Tables
 
 #### Users
+
 ```sql
 CREATE TABLE users (
     id TEXT PRIMARY KEY,
@@ -36,6 +38,7 @@ CREATE TABLE users (
 ```
 
 #### Account Types
+
 ```sql
 CREATE TABLE account_types (
     id TEXT PRIMARY KEY,
@@ -47,6 +50,7 @@ CREATE TABLE account_types (
 ```
 
 #### Accounts
+
 ```sql
 CREATE TABLE accounts (
     id TEXT PRIMARY KEY,
@@ -68,6 +72,7 @@ CREATE TABLE accounts (
 ```
 
 #### Categories
+
 ```sql
 CREATE TABLE categories (
     id TEXT PRIMARY KEY,
@@ -87,6 +92,7 @@ CREATE TABLE categories (
 ```
 
 #### Transactions
+
 ```sql
 CREATE TABLE transactions (
     id TEXT PRIMARY KEY,
@@ -111,6 +117,7 @@ CREATE TABLE transactions (
 ```
 
 ### Additional Tables
+
 - **transfers**: For tracking money movement between accounts
 - **budget_periods**: For managing budget timeframes
 - **budgets**: For category-based budget allocations
@@ -121,6 +128,7 @@ CREATE TABLE transactions (
 ### Tauri Configuration
 
 #### tauri.conf.json
+
 ```json
 {
   "plugins": {
@@ -132,6 +140,7 @@ CREATE TABLE transactions (
 ```
 
 #### Capabilities (src-tauri/capabilities/default.json)
+
 ```json
 {
   "permissions": [
@@ -149,12 +158,14 @@ CREATE TABLE transactions (
 ### Rust Backend Configuration
 
 #### Cargo.toml
+
 ```toml
 [dependencies]
 tauri-plugin-sql = { version = "2.0", features = ["sqlite"] }
 ```
 
 #### lib.rs
+
 ```rust
 use tauri_plugin_sql::{Migration, MigrationKind};
 
@@ -178,25 +189,25 @@ tauri::Builder::default()
 
 ### Basic Database Operations
 
-#### Using Repository Pattern
+#### Using Secure API Service
+
 ```typescript
-import { databaseService } from '@/lib/database';
+import { apiService } from '@/lib/api-service';
 
 // Create an account
-const newAccount = await databaseService.accounts.create({
+const newAccount = await apiService.accounts.create({
   user_id: 'user-123',
   account_type_id: 'checking',
   name: 'My Checking Account',
   initial_balance: 1000.00,
-  current_balance: 1000.00,
   currency: 'USD'
 });
 
 // Find accounts with type information
-const accounts = await databaseService.accounts.findWithType('user-123');
+const accounts = await apiService.accounts.findWithType('user-123');
 
 // Create a transaction with balance update
-const transaction = await databaseService.transactions.createWithBalanceUpdate({
+const transaction = await apiService.transactions.createWithBalanceUpdate({
   user_id: 'user-123',
   account_id: 'account-456',
   category_id: 'groceries',
@@ -207,7 +218,8 @@ const transaction = await databaseService.transactions.createWithBalanceUpdate({
 });
 ```
 
-#### Using React Hooks
+#### Using React Hooks (Secure)
+
 ```typescript
 import { useAccounts, useTransactions, useAccountOperations } from '@/lib/database/hooks';
 
@@ -257,15 +269,18 @@ All hooks follow consistent patterns for return types and error handling.
 #### Delete Operations Return Types
 
 The `deleteAccount` and `deleteTransaction` functions return a promise that resolves to:
+
 ```typescript
 { id: string; deleted: boolean }
 ```
 
 This provides:
+
 - `id`: The ID of the deleted record
 - `deleted`: Boolean indicating whether the deletion was successful
 
 **Example Usage**:
+
 ```typescript
 const { deleteAccount } = useAccountOperations();
 
@@ -288,22 +303,24 @@ This approach ensures type safety and prevents runtime errors that could occur w
 ### Advanced Queries
 
 #### Financial Summaries
+
 ```typescript
 // Get net worth
-const netWorth = await databaseService.accounts.getNetWorth('user-123');
+const netWorth = await apiService.accounts.getNetWorth('user-123');
 
 // Get category spending
-const categorySpending = await databaseService.transactions.getCategorySpending(
+const categorySpending = await apiService.transactions.getCategorySpending(
   'user-123',
   '2024-01-01',
   '2024-01-31'
 );
 
 // Get monthly spending trends
-const monthlySpending = await databaseService.transactions.getMonthlySpending('user-123', 2024);
+const monthlySpending = await apiService.transactions.getMonthlySpending('user-123', 2024);
 ```
 
 #### Dashboard Data
+
 ```typescript
 import { useDashboard } from '@/lib/database/hooks';
 
@@ -331,18 +348,25 @@ function Dashboard() {
 ## Security Considerations
 
 ### Data Protection
+
 - All financial data is stored locally in SQLite
 - Database file is protected by OS-level permissions
 - No sensitive data is transmitted over network
 - UUIDs used for all record identifiers
 
 ### Access Control
+
+- API service enforces authentication and authorization
+- All data access goes through validated Tauri commands
+- Encryption/decryption handled transparently by the API layer
+- No SQL queries exposed to frontend code
 - Row Level Security through user_id filtering
 - All queries scoped to authenticated user
 - Prepared statements prevent SQL injection
 - Input validation at TypeScript level
 
 ### Best Practices
+
 - Always use parameterized queries
 - Validate input data before database operations
 - Handle errors gracefully with user-friendly messages
@@ -351,15 +375,16 @@ function Dashboard() {
 
 ## Error Handling
 
-### Database Errors
+### API Errors
+
 ```typescript
-import { DatabaseError } from '@/lib/database';
+import { FiscusApiError } from '@/api/client';
 
 try {
-  await databaseService.accounts.create(accountData);
+  await apiService.accounts.create(accountData);
 } catch (error) {
-  if (error instanceof DatabaseError) {
-    console.error('Database error:', error.message);
+  if (error instanceof FiscusApiError) {
+    console.error('API error:', error.message);
     console.error('Error code:', error.code);
     console.error('Details:', error.details);
   } else {
@@ -368,26 +393,27 @@ try {
 }
 ```
 
-### Connection Management
+### API Service Management
+
 ```typescript
-import { isDatabaseConnected, getDatabaseVersion, formatDateForDb, formatDateTimeForDb } from '@/lib/database';
+import { apiService, apiUtils } from '@/lib/api-service';
 
-// Check connection status
-const isConnected = await isDatabaseConnected();
-
-// Get database version for debugging
-const version = await getDatabaseVersion();
-
-// Initialize database service
-await databaseService.initialize();
+// Initialize API service
+await apiService.initialize();
 
 // Date formatting utilities with validation
-const dateString = formatDateForDb(new Date()); // "2024-01-15"
-const dateTimeString = formatDateTimeForDb("2024-01-15T10:30:00Z"); // "2024-01-15T10:30:00.000Z"
+const dateString = apiUtils.formatDate(new Date()); // "2024-01-15"
+const dateTimeString = apiUtils.formatDateTime("2024-01-15T10:30:00Z"); // "2024-01-15T10:30:00.000Z"
+
+// Generate secure IDs
+const newId = apiUtils.generateId();
+
+// Validate IDs
+const isValid = apiUtils.isValidId(newId);
 
 // Error handling for invalid dates
 try {
-  formatDateForDb("invalid-date");
+  apiUtils.formatDate("invalid-date");
 } catch (error) {
   console.error("Invalid date provided:", error.message);
 }
@@ -396,11 +422,13 @@ try {
 ## Testing
 
 ### Unit Tests
+
 - Repository methods tested with mock data
 - Hook behavior tested with React Testing Library
 - Error scenarios covered with appropriate assertions
 
 ### Integration Tests
+
 - Database operations tested end-to-end
 - Migration scripts validated
 - Performance benchmarks for common queries
@@ -408,12 +436,14 @@ try {
 ## Migration Management
 
 ### Adding New Migrations
+
 1. Create new SQL file in `src-tauri/migrations/`
 2. Update migration array in `lib.rs`
 3. Increment version number
 4. Test migration on development database
 
 ### Migration Best Practices
+
 - Always backup before running migrations
 - Test migrations on copy of production data
 - Include rollback procedures for complex changes
@@ -422,12 +452,14 @@ try {
 ## Performance Optimization
 
 ### Indexing Strategy
+
 - Primary keys on all tables
 - Foreign key indexes for joins
 - Composite indexes for common query patterns
 - Date-based indexes for time-series queries
 
 ### Query Optimization
+
 - Use LIMIT for paginated results
 - Avoid N+1 queries with proper joins
 - Cache frequently accessed data
@@ -436,6 +468,7 @@ try {
 ## Future Enhancements
 
 ### Planned Features
+
 - Database encryption at rest
 - Automated backup and restore
 - Data export/import functionality
@@ -443,6 +476,7 @@ try {
 - Real-time sync capabilities (optional cloud sync)
 
 ### Performance Improvements
+
 - Connection pooling
 - Query result caching
 - Background data processing

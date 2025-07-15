@@ -1,25 +1,27 @@
 /**
  * React hooks for database operations
  * Provides easy-to-use hooks for common database operations with error handling
+ *
+ * SECURITY UPDATE: Now uses secure API service instead of direct database access
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { DatabaseError, databaseService } from "./index";
+import { FiscusApiError } from "@/api/client";
 import type {
 	Account,
-	AccountFilters,
-	AccountWithType,
-	CreateAccountInput,
-	CreateTransactionInput,
+	CreateAccountRequest,
+	CreateTransactionRequest,
+	Transaction,
+	TransactionFilters,
+	UpdateAccountRequest,
+	UpdateTransactionRequest,
+} from "@/types/api";
+import type {
 	DashboardSummary,
 	QueryOptions,
 	QueryResult,
-	Transaction,
-	TransactionFilters,
-	TransactionWithDetails,
-	UpdateAccountInput,
-	UpdateTransactionInput,
-} from "./types";
+} from "../api-service";
+import { apiService } from "../api-service";
 
 // Generic hook state interface
 interface UseAsyncState<T> {
@@ -28,7 +30,7 @@ interface UseAsyncState<T> {
 	error: string | null;
 }
 
-// Hook for managing async database operations
+// Hook for managing async API operations
 export function useAsyncOperation<T>() {
 	const [state, setState] = useState<UseAsyncState<T>>({
 		data: null,
@@ -45,7 +47,7 @@ export function useAsyncOperation<T>() {
 			return result;
 		} catch (error) {
 			const errorMessage =
-				error instanceof DatabaseError
+				error instanceof FiscusApiError
 					? error.message
 					: "An unexpected error occurred";
 
@@ -61,16 +63,14 @@ export function useAsyncOperation<T>() {
 	return { ...state, execute, reset };
 }
 
-// Hook for database connection status
-export function useDatabaseStatus() {
+// Hook for API service status
+export function useApiStatus() {
 	const [status, setStatus] = useState<{
 		connected: boolean;
-		version: number;
 		loading: boolean;
 		error: string | null;
 	}>({
 		connected: false,
-		version: 0,
 		loading: true,
 		error: null,
 	});
@@ -80,11 +80,12 @@ export function useDatabaseStatus() {
 
 		const checkStatus = async () => {
 			try {
-				const health = await databaseService.getHealthStatus();
+				// For API service, we can check if we can make a simple call
+				// This is a placeholder - in a real implementation you might have a health check endpoint
+				await apiService.initialize();
 				if (mounted) {
 					setStatus({
-						connected: health.connected,
-						version: health.version,
+						connected: true,
 						loading: false,
 						error: null,
 					});
@@ -93,7 +94,6 @@ export function useDatabaseStatus() {
 				if (mounted) {
 					setStatus({
 						connected: false,
-						version: 0,
 						loading: false,
 						error: error instanceof Error ? error.message : "Unknown error",
 					});
@@ -116,22 +116,16 @@ export function useDatabaseStatus() {
 }
 
 // Hook for fetching accounts
-export function useAccounts(
-	userId: string,
-	filters?: AccountFilters,
-	options?: QueryOptions,
-) {
+export function useAccounts(userId: string, options?: QueryOptions) {
 	const { data, loading, error, execute, reset } =
-		useAsyncOperation<QueryResult<AccountWithType>>();
+		useAsyncOperation<Account[]>();
 
-	const fetchAccounts = useCallback(async (): Promise<
-		QueryResult<AccountWithType>
-	> => {
+	const fetchAccounts = useCallback(async (): Promise<Account[]> => {
 		if (!userId) {
-			return { data: [], total: 0, page: 1, limit: 50 };
+			return [];
 		}
-		return databaseService.accounts.findWithType(userId, filters, options);
-	}, [userId, filters, options]);
+		return apiService.accounts.findWithType(userId, options);
+	}, [userId, options]);
 
 	useEffect(() => {
 		if (userId) {
@@ -146,10 +140,7 @@ export function useAccounts(
 	}, [userId, execute, fetchAccounts]);
 
 	return {
-		accounts: data?.data || [],
-		total: data?.total || 0,
-		page: data?.page || 1,
-		limit: data?.limit || 50,
+		accounts: data || [],
 		loading,
 		error,
 		refetch,
@@ -160,23 +151,19 @@ export function useAccounts(
 // Hook for fetching transactions
 export function useTransactions(
 	userId: string,
-	filters?: TransactionFilters,
+	filters?: Omit<TransactionFilters, "user_id">,
 	options?: QueryOptions,
 ) {
 	const { data, loading, error, execute, reset } =
-		useAsyncOperation<QueryResult<TransactionWithDetails>>();
+		useAsyncOperation<QueryResult<Transaction>>();
 
 	const fetchTransactions = useCallback(async (): Promise<
-		QueryResult<TransactionWithDetails>
+		QueryResult<Transaction>
 	> => {
 		if (!userId) {
 			return { data: [], total: 0, page: 1, limit: 50 };
 		}
-		return databaseService.transactions.findWithDetails(
-			userId,
-			filters,
-			options,
-		);
+		return apiService.transactions.findWithDetails(userId, filters, options);
 	}, [userId, filters, options]);
 
 	useEffect(() => {
@@ -210,45 +197,37 @@ export function useAccountOperations() {
 		execute: executeDelete,
 		loading: deleteLoading,
 		error: deleteError,
-	} = useAsyncOperation<{ id: string; deleted: boolean }>();
+	} = useAsyncOperation<boolean>();
 
 	const createAccount = useCallback(
-		async (accountData: CreateAccountInput) => {
-			return execute(() => databaseService.accounts.create(accountData));
+		async (accountData: CreateAccountRequest) => {
+			return execute(() => apiService.accounts.create(accountData));
 		},
 		[execute],
 	);
 
 	const updateAccount = useCallback(
-		async (id: string, updates: UpdateAccountInput) => {
-			return execute(() => databaseService.accounts.update(id, updates));
+		async (
+			id: string,
+			userId: string,
+			updates: Partial<UpdateAccountRequest>,
+		) => {
+			return execute(() => apiService.accounts.update(id, userId, updates));
 		},
 		[execute],
 	);
 
 	const deleteAccount = useCallback(
-		async (id: string) => {
-			return executeDelete(() =>
-				databaseService.accounts
-					.delete(id)
-					.then((deleted) => ({ id, deleted })),
-			);
+		async (id: string, userId: string) => {
+			return executeDelete(() => apiService.accounts.delete(id, userId));
 		},
 		[executeDelete],
-	);
-
-	const updateBalance = useCallback(
-		async (id: string, balance: number) => {
-			return execute(() => databaseService.accounts.updateBalance(id, balance));
-		},
-		[execute],
 	);
 
 	return {
 		createAccount,
 		updateAccount,
 		deleteAccount,
-		updateBalance,
 		loading: loading || deleteLoading,
 		error: error || deleteError,
 	};
@@ -261,31 +240,31 @@ export function useTransactionOperations() {
 		execute: executeDelete,
 		loading: deleteLoading,
 		error: deleteError,
-	} = useAsyncOperation<{ id: string; deleted: boolean }>();
+	} = useAsyncOperation<boolean>();
 
 	const createTransaction = useCallback(
-		async (transactionData: CreateTransactionInput) => {
+		async (transactionData: CreateTransactionRequest) => {
 			return execute(() =>
-				databaseService.transactions.createWithBalanceUpdate(transactionData),
+				apiService.transactions.createWithBalanceUpdate(transactionData),
 			);
 		},
 		[execute],
 	);
 
 	const updateTransaction = useCallback(
-		async (id: string, updates: UpdateTransactionInput) => {
-			return execute(() => databaseService.transactions.update(id, updates));
+		async (
+			id: string,
+			userId: string,
+			updates: Partial<UpdateTransactionRequest>,
+		) => {
+			return execute(() => apiService.transactions.update(id, userId, updates));
 		},
 		[execute],
 	);
 
 	const deleteTransaction = useCallback(
-		async (id: string) => {
-			return executeDelete(() =>
-				databaseService.transactions
-					.delete(id)
-					.then((deleted) => ({ id, deleted })),
-			);
+		async (id: string, userId: string) => {
+			return executeDelete(() => apiService.transactions.delete(id, userId));
 		},
 		[executeDelete],
 	);
@@ -318,51 +297,8 @@ export function useDashboard(userId: string) {
 			};
 		}
 
-		// Fetch all dashboard data in parallel
-		const [
-			totalAssets,
-			totalLiabilities,
-			accountBalances,
-			recentTransactions,
-			categorySpending,
-		] = await Promise.all([
-			databaseService.accounts.getTotalAssets(userId),
-			databaseService.accounts.getTotalLiabilities(userId),
-			databaseService.accounts.getAccountBalances(userId),
-			databaseService.transactions.getRecent(userId, 10),
-			databaseService.transactions.getCategorySpending(userId),
-		]);
-
-		const netWorth = totalAssets - totalLiabilities;
-
-		// Get current month income and expenses
-		const now = new Date();
-		const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-		const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-
-		const [monthlyIncome, monthlyExpenses] = await Promise.all([
-			databaseService.transactions.getTotalIncome(
-				userId,
-				startOfMonth.toISOString().split("T")[0],
-				endOfMonth.toISOString().split("T")[0],
-			),
-			databaseService.transactions.getTotalExpenses(
-				userId,
-				startOfMonth.toISOString().split("T")[0],
-				endOfMonth.toISOString().split("T")[0],
-			),
-		]);
-
-		return {
-			total_assets: totalAssets,
-			total_liabilities: totalLiabilities,
-			net_worth: netWorth,
-			monthly_income: monthlyIncome,
-			monthly_expenses: monthlyExpenses,
-			recent_transactions: recentTransactions,
-			account_balances: accountBalances,
-			top_categories: categorySpending.slice(0, 5), // Top 5 categories
-		};
+		// Use the API service's dashboard summary method
+		return apiService.getDashboardSummary(userId);
 	}, [userId]);
 
 	useEffect(() => {
@@ -386,8 +322,8 @@ export function useDashboard(userId: string) {
 	};
 }
 
-// Hook for initializing database on app start
-export function useDatabaseInitialization() {
+// Hook for initializing API service on app start
+export function useApiInitialization() {
 	const [initialized, setInitialized] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
@@ -396,7 +332,7 @@ export function useDatabaseInitialization() {
 
 		const initialize = async () => {
 			try {
-				await databaseService.initialize();
+				await apiService.initialize();
 				if (mounted) {
 					setInitialized(true);
 					setError(null);
@@ -406,7 +342,7 @@ export function useDatabaseInitialization() {
 					setError(
 						error instanceof Error
 							? error.message
-							: "Failed to initialize database",
+							: "Failed to initialize API service",
 					);
 				}
 			}
@@ -421,3 +357,6 @@ export function useDatabaseInitialization() {
 
 	return { initialized, error };
 }
+
+// Legacy alias for backward compatibility
+export const useDatabaseInitialization = useApiInitialization;

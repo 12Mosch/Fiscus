@@ -132,82 +132,91 @@ export function TransactionsPage() {
 			{/* Page Header */}
 			<div className="flex items-center justify-between">
 				<div>
-					<h1 className="text-3xl font-bold tracking-tight">Transactions</h1>
+					<h1 className="text-3xl font-bold tracking-tight !text-left">
+						Transactions
+					</h1>
 					<p className="text-muted-foreground">
 						Manage your income, expenses, and transfers
 					</p>
 				</div>
-				<div className="flex items-center gap-2">
-					{/* Bulk Actions */}
-					{selectedTransactionIds.length > 0 && (
-						<>
-							<Button
-								variant="outline"
-								size="sm"
-								onClick={() => handleBulkExport("csv")}
-								disabled={loadingStates.bulk}
-							>
-								<Download className="h-4 w-4 mr-1" />
-								Export CSV
-							</Button>
-							<Button
-								variant="outline"
-								size="sm"
-								onClick={() => handleBulkExport("json")}
-								disabled={loadingStates.bulk}
-							>
-								<Download className="h-4 w-4 mr-1" />
-								Export JSON
-							</Button>
-							<Button
-								variant="destructive"
-								size="sm"
-								onClick={handleBulkDelete}
-								disabled={loadingStates.bulk}
-							>
-								Delete ({selectedTransactionIds.length})
-							</Button>
-						</>
-					)}
 
-					{/* Add Transaction */}
-					<Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-						<DialogTrigger asChild>
-							<Button>
-								<Plus className="h-4 w-4 mr-2" />
-								Add Transaction
-							</Button>
-						</DialogTrigger>
-						<DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-							<DialogHeader>
-								<DialogTitle>Add New Transaction</DialogTitle>
-							</DialogHeader>
-							<TransactionForm
-								onSuccess={handleTransactionSuccess}
-								onCancel={() => setIsAddDialogOpen(false)}
-								isModal={true}
-							/>
-						</DialogContent>
-					</Dialog>
-
-					{/* Edit Transaction Dialog */}
-					<Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-						<DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-							<DialogHeader>
-								<DialogTitle>Edit Transaction</DialogTitle>
-							</DialogHeader>
-							{editingTransaction && (
-								<TransactionForm
-									transaction={editingTransaction}
-									onSuccess={handleTransactionSuccess}
-									onCancel={() => setIsEditDialogOpen(false)}
-									isModal={true}
-								/>
-							)}
-						</DialogContent>
-					</Dialog>
-				</div>
+				{/* Add Transaction Button - Primary CTA */}
+				<Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+					<DialogTrigger asChild>
+						<Button variant="default" size="default">
+							<Plus className="h-4 w-4 mr-2" />
+							Add Transaction
+						</Button>
+					</DialogTrigger>
+					<DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+						<DialogHeader>
+							<DialogTitle>Add New Transaction</DialogTitle>
+						</DialogHeader>
+						<TransactionForm
+							onSuccess={handleTransactionSuccess}
+							onCancel={() => setIsAddDialogOpen(false)}
+							isModal={true}
+						/>
+					</DialogContent>
+				</Dialog>
 			</div>
+
+			{/* Bulk Actions Bar - Separate section when items are selected */}
+			{selectedTransactionIds.length > 0 && (
+				<div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
+					<div className="flex items-center gap-2">
+						<span className="text-sm font-medium">
+							{selectedTransactionIds.length} transaction
+							{selectedTransactionIds.length !== 1 ? "s" : ""} selected
+						</span>
+					</div>
+					<div className="flex items-center gap-2">
+						<Button
+							variant="outline"
+							size="sm"
+							onClick={() => handleBulkExport("csv")}
+							disabled={loadingStates.bulk}
+						>
+							<Download className="h-4 w-4 mr-1" />
+							Export CSV
+						</Button>
+						<Button
+							variant="outline"
+							size="sm"
+							onClick={() => handleBulkExport("json")}
+							disabled={loadingStates.bulk}
+						>
+							<Download className="h-4 w-4 mr-1" />
+							Export JSON
+						</Button>
+						<Button
+							variant="destructive"
+							size="sm"
+							onClick={handleBulkDelete}
+							disabled={loadingStates.bulk}
+						>
+							Delete Selected
+						</Button>
+					</div>
+				</div>
+			)}
+
+			{/* Edit Transaction Dialog */}
+			<Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+				<DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+					<DialogHeader>
+						<DialogTitle>Edit Transaction</DialogTitle>
+					</DialogHeader>
+					{editingTransaction && (
+						<TransactionForm
+							transaction={editingTransaction}
+							onSuccess={handleTransactionSuccess}
+							onCancel={() => setIsEditDialogOpen(false)}
+							isModal={true}
+						/>
+					)}
+				</DialogContent>
+			</Dialog>
 
 			{/* Main Content */}
 			<Tabs
@@ -215,12 +224,18 @@ export function TransactionsPage() {
 				onValueChange={setActiveTab}
 				className="space-y-6"
 			>
-				<TabsList className="grid w-full grid-cols-2">
-					<TabsTrigger value="list" className="flex items-center gap-2">
+				<TabsList className="grid w-full grid-cols-2 bg-muted/50 p-1 h-11">
+					<TabsTrigger
+						value="list"
+						className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all duration-200"
+					>
 						<BarChart3 className="h-4 w-4" />
 						Transactions
 					</TabsTrigger>
-					<TabsTrigger value="stats" className="flex items-center gap-2">
+					<TabsTrigger
+						value="stats"
+						className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all duration-200"
+					>
 						<BarChart3 className="h-4 w-4" />
 						Statistics
 					</TabsTrigger>

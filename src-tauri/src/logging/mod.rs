@@ -17,16 +17,9 @@ pub mod sanitizer;
 mod tests;
 
 // Re-export main types for easier access
-pub use config::{
-    init_logging, Environment, LogFormat, LoggingConfig,
-};
-pub use middleware::{
-    DatabaseLogger, ExtractUserId, LoggingMiddleware,
-    RequestContext,
-};
-pub use performance::{
-    init_performance_monitoring, PerformanceMonitor, PerformanceSummary,
-};
+pub use config::{init_logging, Environment, LogFormat, LoggingConfig};
+pub use middleware::{DatabaseLogger, ExtractUserId, LoggingMiddleware, RequestContext};
+pub use performance::{init_performance_monitoring, PerformanceMonitor, PerformanceSummary};
 pub use sanitizer::{DataSanitizer, Sanitizable};
 
 /// Initialize the complete logging system

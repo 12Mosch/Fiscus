@@ -108,6 +108,56 @@ export interface Transaction {
 }
 
 /**
+ * Paginated response wrapper
+ */
+export interface PaginatedResponse<T> {
+	data: T[];
+	total: number;
+	page: number;
+	per_page: number;
+	total_pages: number;
+}
+
+/**
+ * Transaction statistics response
+ */
+export interface TransactionStatsResponse {
+	total_transactions: number;
+	total_income: number;
+	total_expenses: number;
+	net_income: number;
+	average_transaction_amount: number;
+	largest_expense?: number;
+	largest_income?: number;
+	most_frequent_category?: string;
+	transactions_by_type: Record<string, number>;
+	transactions_by_status: Record<string, number>;
+}
+
+/**
+ * Bulk transaction request
+ */
+export interface BulkTransactionRequest {
+	user_id: string;
+	transaction_ids: string[];
+	action: BulkTransactionAction;
+}
+
+/**
+ * Bulk transaction actions
+ */
+export type BulkTransactionAction =
+	| { type: "delete" }
+	| { type: "update_category"; category_id?: string }
+	| { type: "update_status"; status: TransactionStatus }
+	| { type: "export"; format: ExportFormat };
+
+/**
+ * Export formats
+ */
+export type ExportFormat = "csv" | "json";
+
+/**
  * Budget Period entity
  */
 export interface BudgetPeriod {

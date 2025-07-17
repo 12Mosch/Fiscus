@@ -6,10 +6,12 @@
 import { create } from "zustand";
 import { apiClient, FiscusApiError } from "../api/client";
 import type {
+	BulkTransactionRequest,
 	CreateTransactionRequest,
 	CreateTransferRequest,
 	Transaction,
 	TransactionFilters,
+	TransactionStatsResponse,
 	TransactionSummaryResponse,
 	TransactionType,
 	Transfer,
@@ -23,16 +25,41 @@ interface TransactionsState {
 	selectedTransaction: Transaction | null;
 	/** Transaction summary data */
 	summary: TransactionSummaryResponse | null;
+	/** Transaction statistics */
+	stats: TransactionStatsResponse | null;
 	/** Recent transfers */
 	transfers: Transfer[];
+	/** Pagination data */
+	pagination: {
+		total: number;
+		page: number;
+		per_page: number;
+		total_pages: number;
+	} | null;
+	/** Selected transaction IDs for bulk operations */
+	selectedTransactionIds: string[];
 	/** Loading state for transaction operations */
 	loading: boolean;
+	/** Loading state for specific operations */
+	loadingStates: {
+		transactions: boolean;
+		stats: boolean;
+		bulk: boolean;
+		export: boolean;
+	};
 	/** Error state */
 	error: FiscusApiError | null;
 	/** Whether transactions have been loaded */
 	initialized: boolean;
 	/** Current filter settings */
 	currentFilters: TransactionFilters | null;
+	/** Search query */
+	searchQuery: string;
+	/** Sort configuration */
+	sortConfig: {
+		field: string;
+		direction: "asc" | "desc";
+	};
 }
 
 interface TransactionsActions {
@@ -73,6 +100,24 @@ interface TransactionsActions {
 	setLoading: (loading: boolean) => void;
 	/** Reset store state */
 	reset: () => void;
+	/** Load transactions with pagination */
+	loadTransactionsPaginated: (filters: TransactionFilters) => Promise<void>;
+	/** Load transaction statistics */
+	loadStats: (filters: TransactionFilters) => Promise<void>;
+	/** Bulk operations on transactions */
+	bulkOperations: (request: BulkTransactionRequest) => Promise<string | null>;
+	/** Toggle transaction selection for bulk operations */
+	toggleTransactionSelection: (transactionId: string) => void;
+	/** Select all visible transactions */
+	selectAllTransactions: () => void;
+	/** Clear all transaction selections */
+	clearTransactionSelection: () => void;
+	/** Set search query */
+	setSearchQuery: (query: string) => void;
+	/** Set sort configuration */
+	setSortConfig: (field: string, direction: "asc" | "desc") => void;
+	/** Apply filters and reload transactions */
+	applyFilters: (filters: Partial<TransactionFilters>) => Promise<void>;
 }
 
 export type TransactionsStore = TransactionsState & TransactionsActions;
@@ -82,11 +127,25 @@ export const useTransactionsStore = create<TransactionsStore>()((set, get) => ({
 	transactions: [],
 	selectedTransaction: null,
 	summary: null,
+	stats: null,
 	transfers: [],
+	pagination: null,
+	selectedTransactionIds: [],
 	loading: false,
+	loadingStates: {
+		transactions: false,
+		stats: false,
+		bulk: false,
+		export: false,
+	},
 	error: null,
 	initialized: false,
 	currentFilters: null,
+	searchQuery: "",
+	sortConfig: {
+		field: "transaction_date",
+		direction: "desc",
+	},
 
 	// Actions
 	loadTransactions: async (filters: TransactionFilters): Promise<void> => {
@@ -350,12 +409,189 @@ export const useTransactionsStore = create<TransactionsStore>()((set, get) => ({
 			transactions: [],
 			selectedTransaction: null,
 			summary: null,
+			stats: null,
 			transfers: [],
+			pagination: null,
+			selectedTransactionIds: [],
 			loading: false,
+			loadingStates: {
+				transactions: false,
+				stats: false,
+				bulk: false,
+				export: false,
+			},
 			error: null,
 			initialized: false,
 			currentFilters: null,
+			searchQuery: "",
+			sortConfig: {
+				field: "transaction_date",
+				direction: "desc",
+			},
 		});
+	},
+
+	// New enhanced actions
+	loadTransactionsPaginated: async (
+		filters: TransactionFilters,
+	): Promise<void> => {
+		set((state) => ({
+			...state,
+			loadingStates: { ...state.loadingStates, transactions: true },
+			error: null,
+		}));
+
+		try {
+			const response = await apiClient.getTransactionsPaginated(filters);
+
+			set({
+				transactions: response.data,
+				pagination: {
+					total: response.total,
+					page: response.page,
+					per_page: response.per_page,
+					total_pages: response.total_pages,
+				},
+				loadingStates: { ...get().loadingStates, transactions: false },
+				error: null,
+				initialized: true,
+				currentFilters: filters,
+			});
+		} catch (error) {
+			set({
+				loadingStates: { ...get().loadingStates, transactions: false },
+				error:
+					error instanceof FiscusApiError
+						? error
+						: new FiscusApiError(
+								"Failed to load transactions",
+								"INTERNAL_ERROR",
+							),
+			});
+		}
+	},
+
+	loadStats: async (filters: TransactionFilters): Promise<void> => {
+		set((state) => ({
+			...state,
+			loadingStates: { ...state.loadingStates, stats: true },
+			error: null,
+		}));
+
+		try {
+			const stats = await apiClient.getTransactionStats(filters);
+
+			set({
+				stats,
+				loadingStates: { ...get().loadingStates, stats: false },
+				error: null,
+			});
+		} catch (error) {
+			set({
+				loadingStates: { ...get().loadingStates, stats: false },
+				error:
+					error instanceof FiscusApiError
+						? error
+						: new FiscusApiError(
+								"Failed to load transaction statistics",
+								"INTERNAL_ERROR",
+							),
+			});
+		}
+	},
+
+	bulkOperations: async (
+		request: BulkTransactionRequest,
+	): Promise<string | null> => {
+		set((state) => ({
+			...state,
+			loadingStates: { ...state.loadingStates, bulk: true },
+			error: null,
+		}));
+
+		try {
+			const result = await apiClient.bulkTransactionOperations(request);
+
+			set({
+				loadingStates: { ...get().loadingStates, bulk: false },
+				error: null,
+				selectedTransactionIds: [], // Clear selection after operation
+			});
+
+			// Refresh transactions after bulk operation
+			const { currentFilters } = get();
+			if (currentFilters) {
+				await get().loadTransactions(currentFilters);
+			}
+
+			return result;
+		} catch (error) {
+			set({
+				loadingStates: { ...get().loadingStates, bulk: false },
+				error:
+					error instanceof FiscusApiError
+						? error
+						: new FiscusApiError(
+								"Failed to perform bulk operation",
+								"INTERNAL_ERROR",
+							),
+			});
+			return null;
+		}
+	},
+
+	toggleTransactionSelection: (transactionId: string): void => {
+		set((state) => {
+			const isSelected = state.selectedTransactionIds.includes(transactionId);
+			const newSelection = isSelected
+				? state.selectedTransactionIds.filter((id) => id !== transactionId)
+				: [...state.selectedTransactionIds, transactionId];
+
+			return {
+				...state,
+				selectedTransactionIds: newSelection,
+			};
+		});
+	},
+
+	selectAllTransactions: (): void => {
+		set((state) => ({
+			...state,
+			selectedTransactionIds: state.transactions.map((t) => t.id),
+		}));
+	},
+
+	clearTransactionSelection: (): void => {
+		set((state) => ({
+			...state,
+			selectedTransactionIds: [],
+		}));
+	},
+
+	setSearchQuery: (query: string): void => {
+		set((state) => ({
+			...state,
+			searchQuery: query,
+		}));
+	},
+
+	setSortConfig: (field: string, direction: "asc" | "desc"): void => {
+		set((state) => ({
+			...state,
+			sortConfig: { field, direction },
+		}));
+	},
+
+	applyFilters: async (filters: Partial<TransactionFilters>): Promise<void> => {
+		const { currentFilters } = get();
+		const newFilters = { ...currentFilters, ...filters } as TransactionFilters;
+
+		set((state) => ({
+			...state,
+			currentFilters: newFilters,
+		}));
+
+		await get().loadTransactions(newFilters);
 	},
 }));
 

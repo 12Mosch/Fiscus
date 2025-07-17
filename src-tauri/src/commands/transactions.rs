@@ -6,8 +6,9 @@ use uuid::Uuid;
 use crate::{
     database::{encrypted::EncryptedDatabaseUtils, Database, DatabaseUtils},
     dto::{
-        CreateTransactionRequest, CreateTransferRequest, TransactionFilters,
-        TransactionSummaryResponse, UpdateTransactionRequest,
+        BulkTransactionAction, BulkTransactionRequest, CreateTransactionRequest,
+        CreateTransferRequest, ExportFormat, PaginatedResponse, TransactionFilters,
+        TransactionStatsResponse, TransactionSummaryResponse, UpdateTransactionRequest,
     },
     error::{FiscusError, SecurityValidator, Validator},
     models::{Transaction, TransactionStatus, TransactionType, Transfer},
@@ -280,6 +281,159 @@ pub async fn get_transactions(
     .await?;
 
     Ok(transactions)
+}
+
+/// Get transactions with pagination support
+#[tauri::command]
+pub async fn get_transactions_paginated(
+    filters: TransactionFilters,
+    db: State<'_, Database>,
+) -> Result<PaginatedResponse<Transaction>, FiscusError> {
+    // Validate user (already validated by ValidatedUserId)
+    DatabaseUtils::validate_user_exists(&db, &filters.user_id.as_str()).await?;
+
+    // Get total count first
+    let count_query = r#"
+        SELECT COUNT(*) as total
+        FROM transactions
+        WHERE user_id = ?1
+    "#;
+
+    let count_result: Option<HashMap<String, serde_json::Value>> =
+        DatabaseUtils::execute_query_single(
+            &db,
+            count_query,
+            vec![Value::String(filters.user_id.as_str().to_string())],
+        )
+        .await?;
+
+    let total = count_result
+        .and_then(|row| row.get("total").and_then(|v| v.as_i64()))
+        .unwrap_or(0) as i32;
+
+    // Get transactions with filters
+    let transactions = get_transactions(filters.clone(), db).await?;
+
+    let page = filters.offset.unwrap_or(0) / filters.limit.unwrap_or(50) + 1;
+    let per_page = filters.limit.unwrap_or(50);
+
+    Ok(PaginatedResponse::new(transactions, total, page, per_page))
+}
+
+/// Get transaction statistics
+#[tauri::command]
+pub async fn get_transaction_stats(
+    filters: TransactionFilters,
+    db: State<'_, Database>,
+) -> Result<TransactionStatsResponse, FiscusError> {
+    // Validate user (already validated by ValidatedUserId)
+    DatabaseUtils::validate_user_exists(&db, &filters.user_id.as_str()).await?;
+
+    let stats_query = r#"
+        SELECT
+            COUNT(*) as total_transactions,
+            COALESCE(SUM(CASE WHEN transaction_type = 'income' THEN amount ELSE 0 END), 0) as total_income,
+            COALESCE(SUM(CASE WHEN transaction_type = 'expense' THEN amount ELSE 0 END), 0) as total_expenses,
+            COALESCE(AVG(amount), 0) as average_amount,
+            MAX(CASE WHEN transaction_type = 'expense' THEN amount END) as largest_expense,
+            MAX(CASE WHEN transaction_type = 'income' THEN amount END) as largest_income
+        FROM transactions
+        WHERE user_id = ?1
+    "#;
+
+    let stats_result: Option<HashMap<String, serde_json::Value>> =
+        DatabaseUtils::execute_query_single(
+            &db,
+            stats_query,
+            vec![Value::String(filters.user_id.as_str().to_string())],
+        )
+        .await?;
+
+    let stats = stats_result
+        .ok_or_else(|| FiscusError::NotFound("No transaction statistics found".to_string()))?;
+
+    let total_income = parse_decimal_from_json(&stats, "total_income");
+    let total_expenses = parse_decimal_from_json(&stats, "total_expenses");
+
+    // Get transactions by type
+    let type_query = r#"
+        SELECT transaction_type, COUNT(*) as count
+        FROM transactions
+        WHERE user_id = ?1
+        GROUP BY transaction_type
+    "#;
+
+    let type_results: Vec<HashMap<String, serde_json::Value>> = DatabaseUtils::execute_query(
+        &db,
+        type_query,
+        vec![Value::String(filters.user_id.as_str().to_string())],
+    )
+    .await?;
+
+    let mut transactions_by_type = HashMap::new();
+    for row in type_results {
+        if let (Some(tx_type), Some(count)) = (
+            row.get("transaction_type").and_then(|v| v.as_str()),
+            row.get("count").and_then(|v| v.as_i64()),
+        ) {
+            transactions_by_type.insert(tx_type.to_string(), count as i32);
+        }
+    }
+
+    // Get transactions by status
+    let status_query = r#"
+        SELECT status, COUNT(*) as count
+        FROM transactions
+        WHERE user_id = ?1
+        GROUP BY status
+    "#;
+
+    let status_results: Vec<HashMap<String, serde_json::Value>> = DatabaseUtils::execute_query(
+        &db,
+        status_query,
+        vec![Value::String(filters.user_id.as_str().to_string())],
+    )
+    .await?;
+
+    let mut transactions_by_status = HashMap::new();
+    for row in status_results {
+        if let (Some(status), Some(count)) = (
+            row.get("status").and_then(|v| v.as_str()),
+            row.get("count").and_then(|v| v.as_i64()),
+        ) {
+            transactions_by_status.insert(status.to_string(), count as i32);
+        }
+    }
+
+    Ok(TransactionStatsResponse {
+        total_transactions: stats
+            .get("total_transactions")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0) as i32,
+        total_income,
+        total_expenses,
+        net_income: total_income - total_expenses,
+        average_transaction_amount: parse_decimal_from_json(&stats, "average_amount"),
+        largest_expense: {
+            let value = parse_decimal_from_json(&stats, "largest_expense");
+            if value == rust_decimal::Decimal::ZERO {
+                None
+            } else {
+                Some(value)
+            }
+        },
+        largest_income: {
+            let value = parse_decimal_from_json(&stats, "largest_income");
+            if value == rust_decimal::Decimal::ZERO {
+                None
+            } else {
+                Some(value)
+            }
+        },
+        most_frequent_category: None, // TODO: Implement category analysis
+        transactions_by_type,
+        transactions_by_status,
+    })
 }
 
 /// Get a single transaction by ID (internal helper with user_id for encryption)
@@ -939,6 +1093,278 @@ pub async fn get_transfer_by_id(
         .into_iter()
         .next()
         .ok_or_else(|| FiscusError::NotFound("Transfer not found".to_string()))
+}
+
+/// Bulk operations on transactions
+#[tauri::command]
+pub async fn bulk_transaction_operations(
+    request: BulkTransactionRequest,
+    db: State<'_, Database>,
+) -> Result<String, FiscusError> {
+    // Validate user (already validated by ValidatedUserId)
+    DatabaseUtils::validate_user_exists(&db, &request.user_id.as_str()).await?;
+
+    // Validate transaction IDs
+    for transaction_id in &request.transaction_ids {
+        Validator::validate_uuid(transaction_id, "transaction_id")?;
+    }
+
+    if request.transaction_ids.is_empty() {
+        return Err(FiscusError::InvalidInput(
+            "No transaction IDs provided".to_string(),
+        ));
+    }
+
+    if request.transaction_ids.len() > 100 {
+        return Err(FiscusError::InvalidInput(
+            "Cannot process more than 100 transactions at once".to_string(),
+        ));
+    }
+
+    match request.action {
+        BulkTransactionAction::Delete => {
+            bulk_delete_transactions(request.transaction_ids, &request.user_id.as_str(), &db).await
+        }
+        BulkTransactionAction::UpdateCategory { category_id } => {
+            bulk_update_category(
+                request.transaction_ids,
+                category_id,
+                &request.user_id.as_str(),
+                &db,
+            )
+            .await
+        }
+        BulkTransactionAction::UpdateStatus { status } => {
+            bulk_update_status(
+                request.transaction_ids,
+                status,
+                &request.user_id.as_str(),
+                &db,
+            )
+            .await
+        }
+        BulkTransactionAction::Export { format } => {
+            bulk_export_transactions(
+                request.transaction_ids,
+                format,
+                &request.user_id.as_str(),
+                &db,
+            )
+            .await
+        }
+    }
+}
+
+/// Bulk delete transactions
+async fn bulk_delete_transactions(
+    transaction_ids: Vec<String>,
+    user_id: &str,
+    db: &Database,
+) -> Result<String, FiscusError> {
+    with_transaction!(db, async {
+        for transaction_id in &transaction_ids {
+            // Verify ownership before deletion
+            let transaction =
+                get_transaction_by_id_encrypted(transaction_id.clone(), user_id, db).await?;
+
+            if transaction.user_id != user_id {
+                return Err(FiscusError::Authorization(
+                    "Transaction access denied".to_string(),
+                ));
+            }
+
+            // Delete the transaction
+            let delete_query = "DELETE FROM transactions WHERE id = ?1 AND user_id = ?2";
+            DatabaseUtils::execute_non_query(
+                db,
+                delete_query,
+                vec![
+                    Value::String(transaction_id.clone()),
+                    Value::String(user_id.to_string()),
+                ],
+            )
+            .await?;
+
+            // Update account balance
+            let balance_change = match transaction.transaction_type {
+                TransactionType::Income => -transaction.amount,
+                TransactionType::Expense => transaction.amount,
+                TransactionType::Transfer => rust_decimal::Decimal::ZERO,
+            };
+
+            if balance_change != rust_decimal::Decimal::ZERO {
+                let update_balance_query = r#"
+                    UPDATE accounts
+                    SET current_balance = current_balance + ?1, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?2 AND user_id = ?3
+                "#;
+
+                DatabaseUtils::execute_non_query(
+                    db,
+                    update_balance_query,
+                    vec![
+                        Value::String(balance_change.to_string()),
+                        Value::String(transaction.account_id),
+                        Value::String(user_id.to_string()),
+                    ],
+                )
+                .await?;
+            }
+        }
+
+        Ok(format!(
+            "Successfully deleted {} transactions",
+            transaction_ids.len()
+        ))
+    })
+}
+
+/// Bulk update transaction categories
+async fn bulk_update_category(
+    transaction_ids: Vec<String>,
+    category_id: Option<String>,
+    user_id: &str,
+    db: &Database,
+) -> Result<String, FiscusError> {
+    // Validate category if provided
+    if let Some(ref cat_id) = category_id {
+        Validator::validate_uuid(cat_id, "category_id")?;
+    }
+
+    with_transaction!(db, async {
+        let update_query = r#"
+            UPDATE transactions
+            SET category_id = ?1, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?2 AND user_id = ?3
+        "#;
+
+        for transaction_id in &transaction_ids {
+            // Verify ownership
+            let transaction =
+                get_transaction_by_id_encrypted(transaction_id.clone(), user_id, db).await?;
+
+            if transaction.user_id != user_id {
+                return Err(FiscusError::Authorization(
+                    "Transaction access denied".to_string(),
+                ));
+            }
+
+            DatabaseUtils::execute_non_query(
+                db,
+                update_query,
+                vec![
+                    category_id
+                        .as_ref()
+                        .map(|id| Value::String(id.clone()))
+                        .unwrap_or(Value::Null),
+                    Value::String(transaction_id.clone()),
+                    Value::String(user_id.to_string()),
+                ],
+            )
+            .await?;
+        }
+
+        Ok(format!(
+            "Successfully updated category for {} transactions",
+            transaction_ids.len()
+        ))
+    })
+}
+
+/// Bulk update transaction status
+async fn bulk_update_status(
+    transaction_ids: Vec<String>,
+    status: TransactionStatus,
+    user_id: &str,
+    db: &Database,
+) -> Result<String, FiscusError> {
+    with_transaction!(db, async {
+        let update_query = r#"
+            UPDATE transactions
+            SET status = ?1, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?2 AND user_id = ?3
+        "#;
+
+        for transaction_id in &transaction_ids {
+            // Verify ownership
+            let transaction =
+                get_transaction_by_id_encrypted(transaction_id.clone(), user_id, db).await?;
+
+            if transaction.user_id != user_id {
+                return Err(FiscusError::Authorization(
+                    "Transaction access denied".to_string(),
+                ));
+            }
+
+            DatabaseUtils::execute_non_query(
+                db,
+                update_query,
+                vec![
+                    Value::String(status.to_string()),
+                    Value::String(transaction_id.clone()),
+                    Value::String(user_id.to_string()),
+                ],
+            )
+            .await?;
+        }
+
+        Ok(format!(
+            "Successfully updated status for {} transactions",
+            transaction_ids.len()
+        ))
+    })
+}
+
+/// Bulk export transactions
+async fn bulk_export_transactions(
+    transaction_ids: Vec<String>,
+    format: ExportFormat,
+    user_id: &str,
+    db: &Database,
+) -> Result<String, FiscusError> {
+    let mut transactions = Vec::new();
+
+    for transaction_id in &transaction_ids {
+        let transaction =
+            get_transaction_by_id_encrypted(transaction_id.clone(), user_id, db).await?;
+
+        if transaction.user_id != user_id {
+            return Err(FiscusError::Authorization(
+                "Transaction access denied".to_string(),
+            ));
+        }
+
+        transactions.push(transaction);
+    }
+
+    match format {
+        ExportFormat::Json => {
+            let json_data = serde_json::to_string_pretty(&transactions)
+                .map_err(|e| FiscusError::Internal(format!("JSON serialization failed: {e}")))?;
+            Ok(json_data)
+        }
+        ExportFormat::Csv => {
+            let mut csv_data = String::from("id,account_id,category_id,amount,description,transaction_date,transaction_type,status,payee,notes\n");
+
+            for transaction in transactions {
+                csv_data.push_str(&format!(
+                    "{},{},{},{},{},{},{},{},{},{}\n",
+                    transaction.id,
+                    transaction.account_id,
+                    transaction.category_id.unwrap_or_default(),
+                    transaction.amount,
+                    transaction.description.replace(',', ";"),
+                    transaction.transaction_date.format("%Y-%m-%d %H:%M:%S"),
+                    transaction.transaction_type,
+                    transaction.status,
+                    transaction.payee.unwrap_or_default().replace(',', ";"),
+                    transaction.notes.unwrap_or_default().replace(',', ";")
+                ));
+            }
+
+            Ok(csv_data)
+        }
+    }
 }
 
 /// Get transaction summary for a user

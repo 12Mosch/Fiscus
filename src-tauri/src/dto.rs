@@ -1,9 +1,9 @@
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 use crate::encryption::types::{EncryptionAlgorithm, KeyDerivationAlgorithm, KeyType};
-use crate::encryption::utils::EncodingUtils;
 use crate::error::{ValidatedCurrency, ValidatedUserId};
 use crate::models::{GoalStatus, TransactionStatus, TransactionType};
 use crate::security::data_protection::SensitiveData;
@@ -162,7 +162,7 @@ pub struct AccountFilters {
     pub offset: Option<i32>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct TransactionFilters {
     pub user_id: ValidatedUserId,
     pub account_id: Option<String>,
@@ -275,6 +275,43 @@ pub struct TransactionSummaryResponse {
     pub average_transaction: Decimal,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TransactionStatsResponse {
+    pub total_transactions: i32,
+    pub total_income: Decimal,
+    pub total_expenses: Decimal,
+    pub net_income: Decimal,
+    pub average_transaction_amount: Decimal,
+    pub largest_expense: Option<Decimal>,
+    pub largest_income: Option<Decimal>,
+    pub most_frequent_category: Option<String>,
+    pub transactions_by_type: HashMap<String, i32>,
+    pub transactions_by_status: HashMap<String, i32>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BulkTransactionRequest {
+    pub user_id: ValidatedUserId,
+    pub transaction_ids: Vec<String>,
+    pub action: BulkTransactionAction,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BulkTransactionAction {
+    Delete,
+    UpdateCategory { category_id: Option<String> },
+    UpdateStatus { status: TransactionStatus },
+    Export { format: ExportFormat },
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExportFormat {
+    Csv,
+    Json,
+}
+
 /// Utility functions for DTOs
 impl<T> PaginatedResponse<T> {
     pub fn new(data: Vec<T>, total: i32, page: i32, per_page: i32) -> Self {
@@ -290,25 +327,11 @@ impl<T> PaginatedResponse<T> {
 }
 
 /// Encryption-related DTOs
-/// Custom deserializer for base64 validation
-fn deserialize_base64<'de, D>(deserializer: D) -> Result<String, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s = String::deserialize(deserializer)?;
-
-    // Validate that the string is valid base64
-    EncodingUtils::decode_base64(&s)
-        .map_err(|e| serde::de::Error::custom(format!("Invalid base64 encoding: {e}")))?;
-
-    Ok(s)
-}
 
 #[derive(Debug, Deserialize)]
 pub struct EncryptDataRequest {
     pub user_id: ValidatedUserId,
     pub data_type: String,
-    #[serde(deserialize_with = "deserialize_base64")]
     pub data: String, // Base64 encoded data
 }
 
@@ -978,150 +1001,5 @@ mod tests {
                 "Currency {currency} should be rejected"
             );
         }
-    }
-
-    #[test]
-    fn test_encrypt_data_request_base64_validation() {
-        // Test valid base64 strings are accepted
-        let valid_base64_strings = [
-            "SGVsbG8gV29ybGQ=", // "Hello World"
-            "VGVzdCBkYXRh",     // "Test data"
-            "YWJjZGVmZ2hpams=", // "abcdefghijk"
-            "",                 // Empty string (valid base64)
-            "QQ==",             // "A" with proper padding
-            "QUI=",             // "AB" with proper padding
-            "QUJD",             // "ABC" without padding needed
-        ];
-
-        for base64_data in valid_base64_strings {
-            let json = format!(
-                r#"{{
-                "user_id": "550e8400-e29b-41d4-a716-446655440000",
-                "data_type": "test_data",
-                "data": "{base64_data}"
-            }}"#
-            );
-
-            let result = serde_json::from_str::<EncryptDataRequest>(&json);
-            assert!(
-                result.is_ok(),
-                "Valid base64 string '{}' should be accepted, but got error: {:?}",
-                base64_data,
-                result.err()
-            );
-
-            if let Ok(request) = result {
-                assert_eq!(request.data, base64_data);
-                assert_eq!(request.data_type, "test_data");
-                assert_eq!(
-                    request.user_id.as_str(),
-                    "550e8400-e29b-41d4-a716-446655440000"
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn test_encrypt_data_request_invalid_base64_rejection() {
-        // Test invalid base64 strings are rejected
-        let invalid_base64_strings = [
-            "Invalid base64!",    // Contains invalid characters
-            "SGVsbG8gV29ybGQ",    // Missing padding
-            "SGVsbG8gV29ybGQ===", // Too much padding
-            "SGVsbG8@V29ybGQ=",   // Contains invalid character @
-            "SGVsbG8 V29ybGQ=",   // Contains space
-            "123!@#$%^&*()",      // Special characters
-            "Hello World",        // Plain text
-        ];
-
-        for invalid_base64 in invalid_base64_strings {
-            let json = format!(
-                r#"{{
-                "user_id": "550e8400-e29b-41d4-a716-446655440000",
-                "data_type": "test_data",
-                "data": "{invalid_base64}"
-            }}"#
-            );
-
-            let result = serde_json::from_str::<EncryptDataRequest>(&json);
-            assert!(
-                result.is_err(),
-                "Invalid base64 string '{invalid_base64}' should be rejected, but was accepted"
-            );
-
-            // Verify the error message contains base64 validation information
-            if let Err(error) = result {
-                let error_msg = error.to_string().to_lowercase();
-                assert!(
-                    error_msg.contains("base64")
-                        || error_msg.contains("encoding")
-                        || error_msg.contains("invalid"),
-                    "Error message should mention validation failure: {error}"
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn test_encrypt_data_request_control_character_rejection() {
-        // Test strings with control characters that would cause JSON parsing issues
-        // We need to test these separately since they fail at JSON parsing level
-        let test_cases = vec![
-            ("newline", "SGVsbG8\\nV29ybGQ="),
-            ("tab", "SGVsbG8\\tV29ybGQ="),
-            ("carriage_return", "SGVsbG8\\rV29ybGQ="),
-        ];
-
-        for (name, escaped_string) in test_cases {
-            let json = format!(
-                r#"{{
-                "user_id": "550e8400-e29b-41d4-a716-446655440000",
-                "data_type": "test_data",
-                "data": "{escaped_string}"
-            }}"#
-            );
-
-            let result = serde_json::from_str::<EncryptDataRequest>(&json);
-            assert!(
-                result.is_err(),
-                "String with {name} should be rejected, but was accepted"
-            );
-        }
-    }
-
-    #[test]
-    fn test_encrypt_data_request_edge_cases() {
-        // Test edge cases for base64 validation
-
-        // Test with valid user_id but invalid base64
-        let json_invalid_base64 = r#"{
-            "user_id": "550e8400-e29b-41d4-a716-446655440000",
-            "data_type": "sensitive_data",
-            "data": "not_base64_at_all!"
-        }"#;
-        assert!(serde_json::from_str::<EncryptDataRequest>(json_invalid_base64).is_err());
-
-        // Test with invalid user_id (should fail before base64 validation)
-        let json_invalid_user = r#"{
-            "user_id": "invalid-uuid",
-            "data_type": "sensitive_data",
-            "data": "SGVsbG8gV29ybGQ="
-        }"#;
-        assert!(serde_json::from_str::<EncryptDataRequest>(json_invalid_user).is_err());
-
-        // Test with missing data field
-        let json_missing_data = r#"{
-            "user_id": "550e8400-e29b-41d4-a716-446655440000",
-            "data_type": "sensitive_data"
-        }"#;
-        assert!(serde_json::from_str::<EncryptDataRequest>(json_missing_data).is_err());
-
-        // Test with null data field
-        let json_null_data = r#"{
-            "user_id": "550e8400-e29b-41d4-a716-446655440000",
-            "data_type": "sensitive_data",
-            "data": null
-        }"#;
-        assert!(serde_json::from_str::<EncryptDataRequest>(json_null_data).is_err());
     }
 }

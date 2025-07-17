@@ -98,12 +98,15 @@ pub fn run() {
             // Transaction commands
             commands::create_transaction,
             commands::get_transactions,
+            commands::get_transactions_paginated,
             commands::get_transaction_by_id,
             commands::update_transaction,
             commands::delete_transaction,
             commands::create_transfer,
             commands::get_transfer_by_id,
             commands::get_transaction_summary,
+            commands::get_transaction_stats,
+            commands::bulk_transaction_operations,
             // Category commands
             commands::create_category,
             commands::get_categories,

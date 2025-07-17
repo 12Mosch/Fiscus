@@ -14,6 +14,7 @@ import type {
 	BudgetFilters,
 	BudgetPeriod,
 	BudgetSummaryResponse,
+	BulkTransactionRequest,
 	Category,
 	CategoryFilters,
 	ChangePasswordRequest,
@@ -31,9 +32,11 @@ import type {
 	LoginRequest,
 	// Response types
 	LoginResponse,
+	PaginatedResponse,
 	ReportData,
 	Transaction,
 	TransactionFilters,
+	TransactionStatsResponse,
 	TransactionSummaryResponse,
 	Transfer,
 	UpdateAccountRequest,
@@ -358,6 +361,51 @@ export class FiscusApiClient {
 				startDate,
 				endDate,
 			});
+		} catch (error) {
+			throw handleApiError(error);
+		}
+	}
+
+	/**
+	 * Get transactions with pagination support
+	 * @param filters Transaction filter criteria
+	 * @returns Promise resolving to paginated transactions
+	 */
+	async getTransactionsPaginated(
+		filters: TransactionFilters,
+	): Promise<PaginatedResponse<Transaction>> {
+		try {
+			return await invoke("get_transactions_paginated", { filters });
+		} catch (error) {
+			throw handleApiError(error);
+		}
+	}
+
+	/**
+	 * Get transaction statistics
+	 * @param filters Transaction filter criteria
+	 * @returns Promise resolving to transaction statistics
+	 */
+	async getTransactionStats(
+		filters: TransactionFilters,
+	): Promise<TransactionStatsResponse> {
+		try {
+			return await invoke("get_transaction_stats", { filters });
+		} catch (error) {
+			throw handleApiError(error);
+		}
+	}
+
+	/**
+	 * Perform bulk operations on transactions
+	 * @param request Bulk operation request
+	 * @returns Promise resolving to operation result message
+	 */
+	async bulkTransactionOperations(
+		request: BulkTransactionRequest,
+	): Promise<string> {
+		try {
+			return await invoke("bulk_transaction_operations", { request });
 		} catch (error) {
 			throw handleApiError(error);
 		}

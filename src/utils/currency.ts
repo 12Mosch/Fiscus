@@ -161,7 +161,7 @@ export function isValidCurrency(currency: string): boolean {
 
 /**
  * Convert amount between currencies using provided exchange rate
- * @param warning This function does not fetch live exchange rates
+ * @warning This function does not fetch live exchange rates
  * @param amount The amount to convert
  * @param fromCurrency Source currency
  * @param toCurrency Target currency

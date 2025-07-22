@@ -118,7 +118,7 @@ export function TransactionFilters({
 
 	// Count active filters
 	useEffect(() => {
-		const values = form.getValues();
+		const values = form.watch();
 		let count = 0;
 
 		if (values.search) count++;
@@ -132,7 +132,7 @@ export function TransactionFilters({
 			count++;
 
 		setActiveFiltersCount(count);
-	}, [form.getValues]);
+	}, [form.watch]);
 
 	// Apply filters
 	const applyFilters = (data: FilterFormData) => {
@@ -536,9 +536,11 @@ export function TransactionFilters({
 														{...field}
 														onChange={(e) =>
 															field.onChange(
-																e.target.value
-																	? Number.parseFloat(e.target.value)
-																	: undefined,
+																e.target.value === ""
+																	? undefined
+																	: Number.isNaN(Number.parseFloat(e.target.value))
+																		? undefined
+																		: Number.parseFloat(e.target.value),
 															)
 														}
 													/>
@@ -563,9 +565,11 @@ export function TransactionFilters({
 														{...field}
 														onChange={(e) =>
 															field.onChange(
-																e.target.value
-																	? Number.parseFloat(e.target.value)
-																	: undefined,
+																e.target.value === ""
+																	? undefined
+																	: Number.isNaN(Number.parseFloat(e.target.value))
+																		? undefined
+																		: Number.parseFloat(e.target.value),
 															)
 														}
 													/>

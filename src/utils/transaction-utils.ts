@@ -55,10 +55,11 @@ export function prepareTransactionData(
 				: undefined,
 		amount: data.amount,
 		description: data.description,
-		notes: data.notes?.trim() === '' ? undefined : data.notes,
+		notes: data.notes?.trim() === "" ? undefined : data.notes,
 		transaction_date: data.transaction_date.toISOString(),
 		transaction_type: data.transaction_type,
-		payee: data.payee?.trim() === '' ? undefined : data.payee,
-		reference_number: data.reference_number?.trim() === '' ? undefined : data.reference_number,
+		payee: data.payee?.trim() === "" ? undefined : data.payee,
+		reference_number:
+			data.reference_number?.trim() === "" ? undefined : data.reference_number,
 	};
 }

@@ -538,7 +538,9 @@ export function TransactionFilters({
 															field.onChange(
 																e.target.value === ""
 																	? undefined
-																	: Number.isNaN(Number.parseFloat(e.target.value))
+																	: Number.isNaN(
+																				Number.parseFloat(e.target.value),
+																			)
 																		? undefined
 																		: Number.parseFloat(e.target.value),
 															)
@@ -567,7 +569,9 @@ export function TransactionFilters({
 															field.onChange(
 																e.target.value === ""
 																	? undefined
-																	: Number.isNaN(Number.parseFloat(e.target.value))
+																	: Number.isNaN(
+																				Number.parseFloat(e.target.value),
+																			)
 																		? undefined
 																		: Number.parseFloat(e.target.value),
 															)

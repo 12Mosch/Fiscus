@@ -27,11 +27,11 @@ uuid = { version = "1.0", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "2"
 anyhow = "1.0"
-regex = "1.0"
-once_cell = "1.19"
+regex = "1.11"
+once_cell = "1.21"
 rust_decimal = { version = "1.0", features = ["serde-float"] }
 argon2 = { version = "0.5", features = ["password-hash"] }
-tokio = { version = "1.0", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = [
     "json",
@@ -43,19 +43,19 @@ rand = "0.8"
 # Encryption dependencies
 aes-gcm = "0.10"
 rsa = { version = "0.9", features = ["sha2"] }
-ed25519-dalek = { version = "2.0", features = ["rand_core"] }
+ed25519-dalek = { version = "2", features = ["rand_core"] }
 pbkdf2 = { version = "0.12", features = ["simple"] }
 scrypt = "0.11"
-zeroize = { version = "1.7", features = ["zeroize_derive"] }
+zeroize = { version = "1.8", features = ["zeroize_derive"] }
 chacha20poly1305 = "0.10"
 sha2 = "0.10"
 base64 = "0.22"
 async-trait = "0.1"
 hex = "0.4"
-subtle = "2.5"
-toml = "0.8"
+subtle = "2.6"
+toml = "0.9"
 humantime-serde = "1.1"
 
 [dev-dependencies]
 mockall = "0.13"
-tempfile = "3.8"
+tempfile = "3.20"

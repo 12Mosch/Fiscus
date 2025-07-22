@@ -4,7 +4,7 @@ A modern desktop application built with Tauri 2.0 and React, providing a secure 
 
 ## Tech Stack
 
-- **Frontend**: React 18+ with TypeScript
+- **Frontend**: React 19+ with TypeScript
 - **Routing**: TanStack Router
 - **State Management**:
   - **Backend**: TanStack Router loader-function

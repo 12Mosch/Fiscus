@@ -1,5 +1,5 @@
 {
-	"$schema": "https://raw.githubusercontent.com/biomejs/biome/refs/tags/%40biomejs/biome%402.1.1/packages/%40biomejs/biome/configuration_schema.json",
+	"$schema": "https://biomejs.dev/schemas/2.1.2/schema.json",
 	"vcs": {
 		"enabled": true,
 		"clientKind": "git",
@@ -14,7 +14,7 @@
 	},
 	"linter": {
 		"enabled": true,
-		"includes": ["**/src/**", "!**/routeTree.gen.ts"],
+		"includes": ["**/src/**", "!**/routeTree.gen.ts", "!**/node_modules/**"],
 		"rules": {
 			"recommended": true
 		}

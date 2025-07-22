@@ -4,6 +4,7 @@
  */
 
 import type {
+	BulkTransactionAction,
 	CreateAccountRequest,
 	CreateBudgetRequest,
 	CreateCategoryRequest,
@@ -13,6 +14,14 @@ import type {
 	CreateUserRequest,
 	TransactionType,
 } from "../types/api";
+
+// Constants for validation
+const VALID_TRANSACTION_STATUSES = [
+	"pending",
+	"completed",
+	"cancelled",
+] as const;
+const VALID_EXPORT_FORMATS = ["csv", "json"] as const;
 
 /**
  * Validation error interface
@@ -720,6 +729,191 @@ export namespace SecurityUtils {
 	 */
 	export function validateSortDirection(direction: string): boolean {
 		return ["ASC", "DESC", "asc", "desc"].includes(direction);
+	}
+
+	/**
+	 * Validate transaction filters
+	 */
+	export function validateTransactionFilters(filters: {
+		account_id?: string;
+		category_id?: string;
+		start_date?: string;
+		end_date?: string;
+		min_amount?: number;
+		max_amount?: number;
+		search?: string;
+		sort_by?: string;
+		sort_direction?: string;
+		limit?: number;
+		offset?: number;
+	}): string[] {
+		const errors: string[] = [];
+
+		// Validate UUIDs
+		if (
+			filters.account_id &&
+			Validator.validateUUID(filters.account_id, "account_id").length > 0
+		) {
+			errors.push("Invalid account ID format");
+		}
+
+		if (
+			filters.category_id &&
+			Validator.validateUUID(filters.category_id, "category_id").length > 0
+		) {
+			errors.push("Invalid category ID format");
+		}
+
+		// Validate dates
+		if (
+			filters.start_date &&
+			Validator.validateDate(filters.start_date, "start_date", false).length > 0
+		) {
+			errors.push("Invalid start date format");
+		}
+
+		if (
+			filters.end_date &&
+			Validator.validateDate(filters.end_date, "end_date", false).length > 0
+		) {
+			errors.push("Invalid end date format");
+		}
+
+		if (
+			filters.start_date &&
+			filters.end_date &&
+			new Date(filters.start_date) > new Date(filters.end_date)
+		) {
+			errors.push("Start date must be before end date");
+		}
+
+		// Validate amounts
+		if (
+			filters.min_amount !== undefined &&
+			(filters.min_amount < 0 || !Number.isFinite(filters.min_amount))
+		) {
+			errors.push("Minimum amount must be a positive number");
+		}
+
+		if (
+			filters.max_amount !== undefined &&
+			(filters.max_amount < 0 || !Number.isFinite(filters.max_amount))
+		) {
+			errors.push("Maximum amount must be a positive number");
+		}
+
+		if (
+			filters.min_amount !== undefined &&
+			filters.max_amount !== undefined &&
+			filters.min_amount > filters.max_amount
+		) {
+			errors.push("Minimum amount must be less than maximum amount");
+		}
+
+		// Validate search
+		if (filters.search && filters.search.length > 255) {
+			errors.push("Search query is too long (max 255 characters)");
+		}
+
+		// Validate sort fields
+		const allowedSortFields = [
+			"amount",
+			"description",
+			"transaction_date",
+			"created_at",
+			"updated_at",
+		];
+
+		if (
+			filters.sort_by &&
+			!validateSortField(filters.sort_by, allowedSortFields)
+		) {
+			errors.push("Invalid sort field");
+		}
+
+		if (
+			filters.sort_direction &&
+			!validateSortDirection(filters.sort_direction)
+		) {
+			errors.push("Invalid sort direction");
+		}
+
+		// Validate pagination
+		if (
+			filters.limit !== undefined &&
+			(filters.limit < 1 || filters.limit > 1000)
+		) {
+			errors.push("Limit must be between 1 and 1000");
+		}
+
+		if (filters.offset !== undefined && filters.offset < 0) {
+			errors.push("Offset must be non-negative");
+		}
+
+		return errors;
+	}
+
+	/**
+	 * Validate bulk transaction request
+	 */
+	export function validateBulkTransactionRequest(request: {
+		transaction_ids: string[];
+		action: unknown;
+	}): string[] {
+		const errors: string[] = [];
+
+		if (!request.transaction_ids || request.transaction_ids.length === 0) {
+			errors.push("No transaction IDs provided");
+		}
+
+		if (request.transaction_ids && request.transaction_ids.length > 100) {
+			errors.push("Cannot process more than 100 transactions at once");
+		}
+
+		// Validate all transaction IDs
+		for (const id of request.transaction_ids || []) {
+			if (Validator.validateUUID(id, "transaction_id").length > 0) {
+				errors.push(`Invalid transaction ID format: ${id}`);
+				break; // Don't spam with all invalid IDs
+			}
+		}
+
+		// Validate action
+		if (!request.action || typeof request.action !== "object") {
+			errors.push("Invalid action specified");
+		} else {
+			const action = request.action as BulkTransactionAction;
+			switch (action.type) {
+				case "delete":
+					break;
+
+				case "update_category":
+					if (!action.category_id || typeof action.category_id !== "string") {
+						errors.push("Missing or invalid category_id for update_category");
+					}
+					break;
+
+				case "update_status":
+					if (
+						!action.status ||
+						!VALID_TRANSACTION_STATUSES.includes(action.status)
+					) {
+						errors.push("Invalid status for update_status");
+					}
+					break;
+
+				case "export":
+					if (!action.format || !VALID_EXPORT_FORMATS.includes(action.format)) {
+						errors.push("Invalid format for export");
+					}
+					break;
+
+				default:
+					errors.push("Invalid action type");
+			}
+		}
+
+		return errors;
 	}
 
 	/**

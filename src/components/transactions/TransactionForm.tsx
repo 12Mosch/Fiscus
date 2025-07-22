@@ -7,7 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { format } from "date-fns";
 import { CalendarIcon, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { type FieldValues, type UseFormReturn, useForm } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
@@ -45,6 +45,9 @@ import type {
 	TransactionStatus,
 	TransactionType,
 } from "@/types/api";
+import { prepareTransactionData } from "@/utils/transaction-utils";
+
+const NO_CATEGORY_VALUE = "no-category";
 
 // Form validation schema
 const transactionFormSchema = z.object({
@@ -94,7 +97,7 @@ export function TransactionForm({
 		resolver: zodResolver(transactionFormSchema),
 		defaultValues: {
 			account_id: transaction?.account_id || "",
-			category_id: transaction?.category_id || "no-category",
+			category_id: transaction?.category_id || NO_CATEGORY_VALUE,
 			amount: transaction?.amount || 0,
 			description: transaction?.description || "",
 			notes: transaction?.notes || "",
@@ -125,37 +128,22 @@ export function TransactionForm({
 		try {
 			let result: Transaction | null = null;
 
+			// Prepare common transaction data
+			const baseTransactionData = prepareTransactionData(data);
+
 			if (transaction) {
 				// Update existing transaction
-				result = await updateTransaction(transaction.id, userId, {
-					category_id:
-						data.category_id && data.category_id !== "no-category"
-							? data.category_id
-							: undefined,
-					amount: data.amount,
-					description: data.description,
-					notes: data.notes || undefined,
-					transaction_date: data.transaction_date.toISOString(),
-					transaction_type: data.transaction_type,
-					payee: data.payee || undefined,
-					reference_number: data.reference_number || undefined,
-				});
+				result = await updateTransaction(
+					transaction.id,
+					userId,
+					baseTransactionData,
+				);
 			} else {
 				// Create new transaction
 				result = await createTransaction({
 					user_id: userId,
 					account_id: data.account_id,
-					category_id:
-						data.category_id && data.category_id !== "no-category"
-							? data.category_id
-							: undefined,
-					amount: data.amount,
-					description: data.description,
-					notes: data.notes || undefined,
-					transaction_date: data.transaction_date.toISOString(),
-					transaction_type: data.transaction_type,
-					payee: data.payee || undefined,
-					reference_number: data.reference_number || undefined,
+					...baseTransactionData,
 				});
 			}
 
@@ -186,7 +174,7 @@ export function TransactionForm({
 	];
 
 	const content = (
-		<Form {...(form as unknown as UseFormReturn<FieldValues>)}>
+		<Form {...form}>
 			<form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
 				<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 					{/* Account Selection */}
@@ -235,7 +223,9 @@ export function TransactionForm({
 										</SelectTrigger>
 									</FormControl>
 									<SelectContent>
-										<SelectItem value="no-category">No category</SelectItem>
+										<SelectItem value={NO_CATEGORY_VALUE}>
+											No category
+										</SelectItem>
 										{categories.map((category) => (
 											<SelectItem key={category.id} value={category.id}>
 												{category.name}

@@ -56,14 +56,19 @@ export function parseCurrency(currencyString: string): number | null {
 		return null;
 	}
 
-	// Remove currency symbols, spaces, and commas
+	// Remove currency symbols, spaces, commas, and parentheses
 	const cleanString = currencyString
-		.replace(/[$€£¥₹₽¢]/g, "") // Common currency symbols
+		.replace(/[\p{Sc}]/gu, "") // All Unicode currency symbols
 		.replace(/[,\s]/g, "") // Commas and spaces
+		.replace(/[()]/g, "") // Parentheses for negative amounts
 		.trim();
 
+	// Handle negative amounts in parentheses (accounting format)
+	const isNegative =
+		currencyString.includes("(") && currencyString.includes(")");
 	const parsed = Number.parseFloat(cleanString);
-	return Number.isNaN(parsed) ? null : parsed;
+	const result = Number.isNaN(parsed) ? null : parsed;
+	return result !== null && isNegative ? -result : result;
 }
 
 /**
@@ -77,9 +82,11 @@ export function formatCurrencyWithColor(
 	amount: number,
 	currency: string = "USD",
 	locale: string = "en-US",
+	positiveClass: string = "text-green-600",
+	negativeClass: string = "text-red-600",
 ): { formatted: string; colorClass: string } {
 	const formatted = formatCurrency(amount, currency, locale);
-	const colorClass = amount >= 0 ? "text-green-600" : "text-red-600";
+	const colorClass = amount >= 0 ? positiveClass : negativeClass;
 
 	return { formatted, colorClass };
 }
@@ -153,13 +160,15 @@ export function isValidCurrency(currency: string): boolean {
 }
 
 /**
- * Convert amount between currencies (placeholder - would need exchange rates)
+ * Convert amount between currencies using provided exchange rate
+ * @param warning This function does not fetch live exchange rates
  * @param amount The amount to convert
  * @param fromCurrency Source currency
  * @param toCurrency Target currency
  * @param exchangeRate The exchange rate (from -> to)
  * @returns Converted amount
  */
+// TODO: Fetch live exchange rates from an API
 export function convertCurrency(
 	amount: number,
 	fromCurrency: string,
@@ -168,6 +177,9 @@ export function convertCurrency(
 ): number {
 	if (fromCurrency === toCurrency) {
 		return amount;
+	}
+	if (exchangeRate <= 0) {
+		throw new Error("Exchange rate must be positive");
 	}
 	return amount * exchangeRate;
 }

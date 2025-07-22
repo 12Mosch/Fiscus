@@ -10,6 +10,7 @@ import { TransactionForm } from "@/components/transactions/TransactionForm";
 import { TransactionList } from "@/components/transactions/TransactionList";
 import { TransactionStats } from "@/components/transactions/TransactionStats";
 import { Button } from "@/components/ui/button";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import {
 	Dialog,
 	DialogContent,
@@ -33,6 +34,7 @@ export function TransactionsPage() {
 
 	const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 	const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+	const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
 	const [editingTransaction, setEditingTransaction] =
 		useState<Transaction | null>(null);
 	const [activeTab, setActiveTab] = useState("list");
@@ -60,6 +62,7 @@ export function TransactionsPage() {
 	};
 
 	// Handle view transaction (could open a detail view)
+	// TODO: Implement a proper view transaction dialog
 	const handleViewTransaction = (transaction: Transaction) => {
 		// For now, just edit the transaction
 		handleEditTransaction(transaction);
@@ -103,27 +106,32 @@ export function TransactionsPage() {
 			}
 		} catch (error) {
 			console.error("Export failed:", error);
+			// TODO: Show error toast/notification to user
 		}
 	};
 
-	// Handle bulk delete
-	const handleBulkDelete = async () => {
+	// Handle bulk delete - show confirmation dialog
+	const handleBulkDelete = () => {
 		if (selectedTransactionIds.length === 0 || !userId) return;
+		setIsDeleteConfirmOpen(true);
+	};
 
-		if (
-			confirm(
-				`Are you sure you want to delete ${selectedTransactionIds.length} transactions?`,
-			)
-		) {
-			try {
-				await bulkOperations({
-					user_id: userId,
-					transaction_ids: selectedTransactionIds,
-					action: { type: "delete" },
-				});
-			} catch (error) {
-				console.error("Delete failed:", error);
-			}
+	// Handle confirmed bulk delete
+	const handleConfirmedBulkDelete = async () => {
+		if (!userId) return;
+
+		try {
+			await bulkOperations({
+				user_id: userId,
+				transaction_ids: selectedTransactionIds,
+				action: { type: "delete" },
+			});
+			// Close the confirmation dialog on success
+			setIsDeleteConfirmOpen(false);
+		} catch (error) {
+			console.error("Delete failed:", error);
+			// TODO: Show error toast/notification to user
+			// Keep dialog open on error so user can retry or cancel
 		}
 	};
 
@@ -265,6 +273,20 @@ export function TransactionsPage() {
 					<TransactionStats filters={filters} showDetails={true} />
 				</TabsContent>
 			</Tabs>
+
+			{/* Bulk Delete Confirmation Dialog */}
+			<ConfirmationDialog
+				open={isDeleteConfirmOpen}
+				onOpenChange={setIsDeleteConfirmOpen}
+				title="Delete Transactions"
+				message={`Are you sure you want to delete ${selectedTransactionIds.length} transaction${selectedTransactionIds.length === 1 ? "" : "s"}? This action cannot be undone.`}
+				confirmText="Delete"
+				cancelText="Cancel"
+				confirmVariant="destructive"
+				onConfirm={handleConfirmedBulkDelete}
+				isLoading={loadingStates.bulk}
+				showIcon={true}
+			/>
 		</div>
 	);
 }

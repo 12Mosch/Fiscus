@@ -4,6 +4,7 @@
  */
 
 import type {
+	BulkTransactionAction,
 	CreateAccountRequest,
 	CreateBudgetRequest,
 	CreateCategoryRequest,
@@ -13,6 +14,14 @@ import type {
 	CreateUserRequest,
 	TransactionType,
 } from "../types/api";
+
+// Constants for validation
+const VALID_TRANSACTION_STATUSES = [
+	"pending",
+	"completed",
+	"cancelled",
+] as const;
+const VALID_EXPORT_FORMATS = ["csv", "json"] as const;
 
 /**
  * Validation error interface
@@ -872,6 +881,36 @@ export namespace SecurityUtils {
 		// Validate action
 		if (!request.action || typeof request.action !== "object") {
 			errors.push("Invalid action specified");
+		} else {
+			const action = request.action as BulkTransactionAction;
+			switch (action.type) {
+				case "delete":
+					break;
+
+				case "update_category":
+					if (!action.category_id || typeof action.category_id !== "string") {
+						errors.push("Missing or invalid category_id for update_category");
+					}
+					break;
+
+				case "update_status":
+					if (
+						!action.status ||
+						!VALID_TRANSACTION_STATUSES.includes(action.status)
+					) {
+						errors.push("Invalid status for update_status");
+					}
+					break;
+
+				case "export":
+					if (!action.format || !VALID_EXPORT_FORMATS.includes(action.format)) {
+						errors.push("Invalid format for export");
+					}
+					break;
+
+				default:
+					errors.push("Invalid action type");
+			}
 		}
 
 		return errors;

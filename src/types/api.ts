@@ -129,6 +129,8 @@ export interface TransactionStatsResponse {
 	average_transaction_amount: number;
 	largest_expense?: number;
 	largest_income?: number;
+	/** Most frequent category (not yet implemented in backend) */
+	// TODO: Implement most frequent category in backend
 	most_frequent_category?: string;
 	transactions_by_type: Record<string, number>;
 	transactions_by_status: Record<string, number>;
@@ -604,22 +606,6 @@ export interface LoginResponse {
 	user: User;
 	/** Optional session token */
 	session_token?: string;
-}
-
-/**
- * Paginated response wrapper
- */
-export interface PaginatedResponse<T> {
-	/** Data items */
-	data: T[];
-	/** Total number of items */
-	total: number;
-	/** Current page */
-	page: number;
-	/** Items per page */
-	per_page: number;
-	/** Total number of pages */
-	total_pages: number;
 }
 
 /**

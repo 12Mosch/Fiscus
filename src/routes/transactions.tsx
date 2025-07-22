@@ -22,8 +22,14 @@ const transactionsSearchSchema = z.object({
 	status: z.enum(["completed", "pending", "cancelled"]).optional(),
 
 	// Date filters
-	start_date: z.string().datetime().optional(),
-	end_date: z.string().datetime().optional(),
+	start_date: z
+		.string()
+		.regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format")
+		.optional(),
+	end_date: z
+		.string()
+		.regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format")
+		.optional(),
 	date_preset: z
 		.enum(["today", "yesterday", "week", "month", "quarter", "year"])
 		.optional(),
@@ -54,8 +60,7 @@ export const Route = createFileRoute("/transactions")({
 	validateSearch: transactionsSearchSchema,
 	// Preload transaction data based on search params
 	beforeLoad: ({ search }) => {
-		// You can add authentication checks here
-		// For now, we'll just pass through the search params
+		// TODO: Add authentication checks
 		return {
 			searchParams: search,
 		};

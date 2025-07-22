@@ -12,7 +12,9 @@ import {
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
-function Form({ ...props }: React.ComponentProps<typeof FormProvider>) {
+function Form<TFieldValues extends FieldValues = FieldValues>({
+	...props
+}: React.ComponentProps<typeof FormProvider<TFieldValues>>) {
 	return <FormProvider {...props} />;
 }
 
@@ -23,8 +25,8 @@ type FormFieldContextValue<
 	name: TName;
 };
 
-const FormFieldContext = React.createContext<FormFieldContextValue>(
-	{} as FormFieldContextValue,
+const FormFieldContext = React.createContext<FormFieldContextValue | null>(
+	null,
 );
 
 function FormField<
@@ -43,11 +45,11 @@ const useFormField = () => {
 	const itemContext = React.useContext(FormItemContext);
 	const { getFieldState, formState } = useFormContext();
 
-	const fieldState = getFieldState(fieldContext.name, formState);
-
 	if (!fieldContext) {
 		throw new Error("useFormField should be used within <FormField>");
 	}
+
+	const fieldState = getFieldState(fieldContext.name, formState);
 
 	const { id } = itemContext;
 

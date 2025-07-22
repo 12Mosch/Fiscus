@@ -122,10 +122,11 @@ export function TransactionFilters({
 		let count = 0;
 
 		if (values.search) count++;
-		if (values.account_id) count++;
-		if (values.category_id) count++;
-		if (values.transaction_type) count++;
-		if (values.status) count++;
+		if (values.account_id && values.account_id !== "all-accounts") count++;
+		if (values.category_id && values.category_id !== "all-categories") count++;
+		if (values.transaction_type && values.transaction_type !== "all-types")
+			count++;
+		if (values.status && values.status !== "all-statuses") count++;
 		if (values.start_date || values.end_date) count++;
 		if (values.min_amount !== undefined || values.max_amount !== undefined)
 			count++;
@@ -535,7 +536,9 @@ export function TransactionFilters({
 														{...field}
 														onChange={(e) =>
 															field.onChange(
-																Number.parseFloat(e.target.value) || undefined,
+																e.target.value
+																	? Number.parseFloat(e.target.value)
+																	: undefined,
 															)
 														}
 													/>
@@ -560,7 +563,9 @@ export function TransactionFilters({
 														{...field}
 														onChange={(e) =>
 															field.onChange(
-																Number.parseFloat(e.target.value) || undefined,
+																e.target.value
+																	? Number.parseFloat(e.target.value)
+																	: undefined,
 															)
 														}
 													/>
